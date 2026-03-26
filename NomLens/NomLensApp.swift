@@ -1,23 +1,13 @@
-//
-//  NomLensApp.swift
-//  NomLens
-//
-//  Created by kt on 2026-03-25.
-//
-
 import SwiftUI
 import SwiftData
 
 @main
 struct NomLensApp: App {
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
+        let schema = Schema([DecodingSession.self])
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return try ModelContainer(for: schema, configurations: [config])
         } catch {
             fatalError("Could not create ModelContainer: \(error)")
         }
