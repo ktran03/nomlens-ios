@@ -27,6 +27,8 @@ enum DecoderState {
     case idle
     case preprocessing
     case segmenting
+    /// Segmentation complete — waiting for user to confirm before spending API calls.
+    case segmented([CharacterCrop])
     case decoding(progress: Int, total: Int)
     case done([CharacterDecodeResult])
     case zeroDetected
@@ -35,8 +37,11 @@ enum DecoderState {
 
 // MARK: - ViewModel
 
-/// Orchestrates the full decode pipeline:
-/// preprocess → segment → decode → publish results.
+/// Orchestrates the decode pipeline in two user-visible phases:
+///   1. `segmentOnly(image:)` → preprocess → segment → `.segmented`
+///   2. `startDecoding()`     → decode all crops → `.done`
+///
+/// The combined `decode(image:)` runs both phases without pausing (used by tests).
 ///
 /// All state mutations happen on the main actor.
 /// Inject `segmentor` and `decoder` for unit testing.
@@ -47,8 +52,8 @@ final class DecoderViewModel: ObservableObject {
 
     private let preprocessor: ImagePreprocessor
     private let segmentor: any ImageSegmenting
-    private let decoder: any CharacterDecoding
-    private let settings: PreprocessingSettings
+    let decoder: any CharacterDecoding
+    var settings: PreprocessingSettings
 
     private var currentTask: Task<Void, Never>?
 
@@ -66,12 +71,33 @@ final class DecoderViewModel: ObservableObject {
 
     // MARK: - Public API
 
-    /// Start the pipeline. Returns the underlying Task so callers (e.g. tests)
-    /// can await completion with `task.value`.
+    /// Phase 1: preprocess + segment only. Stops at `.segmented`.
+    @discardableResult
+    func segmentOnly(image: UIImage) -> Task<Void, Never> {
+        currentTask?.cancel()
+        let task = Task { await runSegment(image: image, thenDecode: false) }
+        currentTask = task
+        return task
+    }
+
+    /// Phase 2: decode the crops from the current `.segmented` state.
+    @discardableResult
+    func startDecoding() -> Task<Void, Never> {
+        guard case .segmented(let crops) = state else {
+            return Task {}
+        }
+        currentTask?.cancel()
+        let task = Task { await runDecode(crops: crops) }
+        currentTask = task
+        return task
+    }
+
+    /// Full pipeline (preprocess → segment → decode). Used by tests and the
+    /// "decode everything automatically" path.
     @discardableResult
     func decode(image: UIImage) -> Task<Void, Never> {
         currentTask?.cancel()
-        let task = Task { await run(image: image) }
+        let task = Task { await runSegment(image: image, thenDecode: true) }
         currentTask = task
         return task
     }
@@ -82,55 +108,95 @@ final class DecoderViewModel: ObservableObject {
         state = .idle
     }
 
-    // MARK: - Pipeline
+    // MARK: - Computed helpers
 
-    private func run(image: UIImage) async {
-        // 1. Preprocess
+    var isWorking: Bool {
+        switch state {
+        case .preprocessing, .segmenting, .decoding: return true
+        default: return false
+        }
+    }
+
+    var segmentedCrops: [CharacterCrop]? {
+        if case .segmented(let crops) = state { return crops }
+        return nil
+    }
+
+    var currentResults: [CharacterDecodeResult]? {
+        if case .done(let r) = state { return r }
+        return nil
+    }
+
+    var progressFraction: Double {
+        if case .decoding(let done, let total) = state, total > 0 {
+            return Double(done) / Double(total)
+        }
+        return 0
+    }
+
+    var isDone: Bool {
+        if case .done = state { return true }
+        return false
+    }
+
+    var isZeroDetected: Bool {
+        if case .zeroDetected = state { return true }
+        return false
+    }
+
+    var isSegmented: Bool {
+        if case .segmented = state { return true }
+        return false
+    }
+
+    // MARK: - Pipeline internals
+
+    private func runSegment(image: UIImage, thenDecode: Bool) async {
         state = .preprocessing
         guard let ciIn = ImageUtilities.ciImage(from: image) else {
             state = .failed(DecoderError.imageEncodingFailed)
             return
         }
         let processed = preprocessor.process(image: ciIn, settings: settings)
-
         guard !Task.isCancelled else { return }
 
-        // 2. Convert processed CIImage → UIImage for Vision
         guard let uiProcessed = ImageUtilities.uiImage(from: processed,
                                                         context: preprocessor.context) else {
             state = .failed(DecoderError.imageEncodingFailed)
             return
         }
 
-        // 3. Segment
         state = .segmenting
         let segResult = await segmentor.segment(image: uiProcessed)
-
         guard !Task.isCancelled else { return }
 
         switch segResult {
         case .zeroDetected, .belowThreshold:
             state = .zeroDetected
-
         case .characters(let crops):
-            // 4. Decode
-            state = .decoding(progress: 0, total: crops.count)
-            do {
-                let results = try await decoder.decodeAll(crops) { done, total in
-                    Task { @MainActor [weak self] in
-                        // Guard prevents a queued progress update from overwriting
-                        // .done after decodeAll has already returned.
-                        if case .decoding = self?.state {
-                            self?.state = .decoding(progress: done, total: total)
-                        }
+            if thenDecode {
+                await runDecode(crops: crops)
+            } else {
+                state = .segmented(crops)
+            }
+        }
+    }
+
+    private func runDecode(crops: [CharacterCrop]) async {
+        state = .decoding(progress: 0, total: crops.count)
+        do {
+            let results = try await decoder.decodeAll(crops) { done, total in
+                Task { @MainActor [weak self] in
+                    if case .decoding = self?.state {
+                        self?.state = .decoding(progress: done, total: total)
                     }
                 }
-                guard !Task.isCancelled else { return }
-                state = .done(results)
-            } catch {
-                guard !Task.isCancelled else { return }
-                state = .failed(error)
             }
+            guard !Task.isCancelled else { return }
+            state = .done(results)
+        } catch {
+            guard !Task.isCancelled else { return }
+            state = .failed(error)
         }
     }
 }

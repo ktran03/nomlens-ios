@@ -1,0 +1,146 @@
+import SwiftUI
+import SwiftData
+
+/// Displays the decoded Han Nôm characters as a grid of cards,
+/// with a "Save" button to persist the session to SwiftData history.
+struct ResultView: View {
+    let sourceImage: UIImage
+    let results: [CharacterDecodeResult]
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var saved = false
+
+    // MARK: - Layout
+
+    private let columns = [GridItem(.adaptive(minimum: 100), spacing: 12)]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 24) {
+                // Transliteration header
+                if !fullTransliteration.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Transliteration")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textCase(.uppercase)
+                        Text(fullTransliteration)
+                            .font(.title3)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                }
+
+                // Character grid
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(Array(results.enumerated()), id: \.offset) { _, result in
+                        CharacterCard(result: result)
+                    }
+                }
+                .padding(.horizontal)
+
+                // Save button
+                Button(action: save) {
+                    Label(saved ? "Saved" : "Save to History",
+                          systemImage: saved ? "checkmark.circle.fill" : "square.and.arrow.down")
+                        .font(.title3.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(saved ? Color.green : Color.accentColor)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+                .disabled(saved)
+                .padding(.horizontal)
+                .padding(.bottom)
+            }
+            .padding(.top)
+        }
+        .navigationTitle("Results")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    // MARK: - Helpers
+
+    private var fullTransliteration: String {
+        results.compactMap { $0.quocNgu }.joined(separator: " ")
+    }
+
+    private var fullMeaning: String {
+        results.compactMap { $0.meaning }.joined(separator: "; ")
+    }
+
+    private func save() {
+        let jpeg = ImageUtilities.jpegData(from: sourceImage)
+        let json = try? JSONEncoder().encode(results)
+
+        let session = DecodingSession(
+            sourceImageData: jpeg,
+            fullTransliteration: fullTransliteration,
+            fullMeaning: fullMeaning,
+            characterCount: results.count,
+            characterResultsJSON: json
+        )
+        modelContext.insert(session)
+        saved = true
+    }
+}
+
+// MARK: - CharacterCard
+
+private struct CharacterCard: View {
+    let result: CharacterDecodeResult
+
+    var body: some View {
+        VStack(spacing: 6) {
+            if let char = result.character {
+                Text(char)
+                    .font(.system(size: 42))
+                    .minimumScaleFactor(0.5)
+            } else {
+                Image(systemName: "questionmark")
+                    .font(.system(size: 32))
+                    .foregroundStyle(.secondary)
+            }
+
+            if let qn = result.quocNgu {
+                Text(qn)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.primary)
+            }
+
+            if let meaning = result.meaning {
+                Text(meaning)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+
+            confidenceBadge
+        }
+        .padding(10)
+        .frame(minHeight: 140)
+        .background(Color(.secondarySystemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private var confidenceBadge: some View {
+        let (label, color): (String, Color) = switch result.confidence {
+        case .high:   ("High",   .green)
+        case .medium: ("Medium", .orange)
+        case .low:    ("Low",    .red)
+        case .none:   ("—",      .secondary)
+        }
+        Text(label)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .foregroundStyle(color)
+            .clipShape(Capsule())
+    }
+}
