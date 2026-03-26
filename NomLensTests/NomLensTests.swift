@@ -104,6 +104,10 @@ struct APIKeyTests {
 
 // MARK: - M1: CharacterDecodeResult JSON decoding
 
+// @MainActor required: SwiftData's @Model in the NomLens module causes Swift 6 to
+// infer @MainActor on the synthesized Decodable conformance. Tests must run on the
+// main actor to match.
+@MainActor
 struct CharacterDecodeResultTests {
 
     @Test func decodesFullResponseCorrectly() throws {
