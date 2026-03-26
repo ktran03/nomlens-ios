@@ -16,7 +16,9 @@ struct CharacterSegmentor {
     /// Segment characters from a preprocessed `UIImage`.
     /// - Returns: A `SegmentationResult` with crops already in reading order.
     func segment(image: UIImage) async -> SegmentationResult {
-        guard let cgImage = image.cgImage else { return .zeroDetected }
+        guard let cgImage = image.cgImage else {
+            return .zeroDetected
+        }
 
         let observations = await runVision(on: cgImage)
 
@@ -35,25 +37,35 @@ struct CharacterSegmentor {
     }
 
     // MARK: - Vision
+    //
+    // VNRecognizeTextRequest is an OCR engine — it doesn't recognise Han Nôm script.
+    // VNDetectTextRectanglesRequest does pure visual region detection (finds ink
+    // blobs shaped like characters) without any language model, so it works for
+    // any script including Han Nôm.
 
-    private func runVision(on cgImage: CGImage) async -> [VNRecognizedTextObservation] {
+    private func runVision(on cgImage: CGImage) async -> [VNTextObservation] {
         await withCheckedContinuation { continuation in
-            let request = VNRecognizeTextRequest { request, _ in
-                let obs = request.results as? [VNRecognizedTextObservation] ?? []
+            let request = VNDetectTextRectanglesRequest { request, _ in
+                let obs = request.results as? [VNTextObservation] ?? []
                 continuation.resume(returning: obs)
             }
-            request.recognitionLevel = .accurate
-            request.usesLanguageCorrection = false
+            // Report individual character-level bounding boxes within each
+            // detected text region.
+            request.reportCharacterBoxes = true
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            try? handler.perform([request])
+            do {
+                try handler.perform([request])
+            } catch {
+                continuation.resume(returning: [])
+            }
         }
     }
 
     // MARK: - Crop extraction
 
     private func buildCrops(
-        from observations: [VNRecognizedTextObservation],
+        from observations: [VNTextObservation],
         sourceImage: UIImage,
         cgImage: CGImage
     ) -> [CharacterCrop] {
@@ -63,17 +75,13 @@ struct CharacterSegmentor {
         var crops: [CharacterCrop] = []
 
         for (obsIdx, obs) in observations.enumerated() {
-            guard let candidate = obs.topCandidates(1).first else { continue }
-            let text = candidate.string
+            // characterBoxes contains one VNRectangleObservation per detected glyph.
+            let charBoxes = obs.characterBoxes ?? []
 
-            for (charIdx, char) in text.enumerated() {
-                let charIndex = text.index(text.startIndex, offsetBy: charIdx)
-                let range = charIndex ..< text.index(after: charIndex)
-                guard let rect = try? candidate.boundingBox(for: range) else { continue }
-
-                // Vision normalized box: origin bottom-left.
+            for (charIdx, box) in charBoxes.enumerated() {
+                // Vision normalized box: origin bottom-left, y increases upward.
                 // Convert to pixel-space with origin top-left.
-                let norm = rect.boundingBox
+                let norm = box.boundingBox
                 let pixelBox = CGRect(
                     x:      norm.minX * imageW,
                     y:      (1 - norm.maxY) * imageH,

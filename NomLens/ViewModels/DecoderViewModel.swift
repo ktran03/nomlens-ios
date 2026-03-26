@@ -149,6 +149,11 @@ final class DecoderViewModel: ObservableObject {
         return false
     }
 
+    var failureMessage: String? {
+        if case .failed(let error) = state { return error.localizedDescription }
+        return nil
+    }
+
     // MARK: - Pipeline internals
 
     private func runSegment(image: UIImage, thenDecode: Bool) async {
@@ -157,6 +162,7 @@ final class DecoderViewModel: ObservableObject {
             state = .failed(DecoderError.imageEncodingFailed)
             return
         }
+
         let processed = preprocessor.process(image: ciIn, settings: settings)
         guard !Task.isCancelled else { return }
 
@@ -171,7 +177,9 @@ final class DecoderViewModel: ObservableObject {
         guard !Task.isCancelled else { return }
 
         switch segResult {
-        case .zeroDetected, .belowThreshold:
+        case .zeroDetected:
+            state = .zeroDetected
+        case .belowThreshold:
             state = .zeroDetected
         case .characters(let crops):
             if thenDecode {

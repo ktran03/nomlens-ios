@@ -11,6 +11,7 @@ struct PreprocessingView: View {
 
     @State private var preset: Preset = .default
     @State private var showZeroAlert = false
+    @State private var errorMessage: String? = nil
 
     // MARK: - Presets
 
@@ -92,6 +93,17 @@ struct PreprocessingView: View {
         }
         .onChange(of: vm.isZeroDetected) { _, zero in
             if zero { showZeroAlert = true }
+        }
+        .onChange(of: vm.failureMessage) { _, msg in
+            if let msg { errorMessage = msg }
+        }
+        .alert("Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil; vm.cancel() } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage ?? "")
         }
         .alert("No Characters Found", isPresented: $showZeroAlert) {
             Button("Try Another Preset") { vm.cancel() }

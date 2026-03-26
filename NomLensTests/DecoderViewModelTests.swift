@@ -127,7 +127,7 @@ struct DecoderViewModelTests {
     @Test func decodeErrorTransitionsToFailed() async {
         let vm = makeVM(
             segmentor: MockSegmentor(result: .characters([makeCrop()])),
-            decoder: MockDecoder(.fail(DecoderError.apiError(statusCode: 429)))
+            decoder: MockDecoder(.fail(DecoderError.apiError(statusCode: 429, message: nil)))
         )
         let task = vm.decode(image: whiteImage())
         await task.value

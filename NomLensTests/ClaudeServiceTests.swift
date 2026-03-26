@@ -205,14 +205,14 @@ struct ClaudeServiceNetworkTests {
 
     @Test func throwsAPIErrorOnHTTP401() async throws {
         let service = makeService(responses: [(Data(), 401)])
-        await #expect(throws: DecoderError.apiError(statusCode: 401)) {
+        await #expect(throws: DecoderError.apiError(statusCode: 401, message: nil)) {
             try await service.decodeCharacter(makeCrop())
         }
     }
 
     @Test func throwsAPIErrorOnHTTP429() async throws {
         let service = makeService(responses: [(Data(), 429)])
-        await #expect(throws: DecoderError.apiError(statusCode: 429)) {
+        await #expect(throws: DecoderError.apiError(statusCode: 429, message: nil)) {
             try await service.decodeCharacter(makeCrop())
         }
     }

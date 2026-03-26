@@ -20,11 +20,31 @@ enum DecoderError: Error, Equatable {
     /// Network request timed out after all retries.
     case networkTimeout
     /// HTTP error from the Claude API (e.g. 401, 429, 500).
-    case apiError(statusCode: Int)
+    case apiError(statusCode: Int, message: String?)
     /// Claude responded but the JSON could not be parsed.
     case invalidJSON(String)
     /// The response content array was empty or had no text block.
     case emptyResponse
+}
+
+extension DecoderError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .imageEncodingFailed:
+            return "Failed to encode image as JPEG."
+        case .missingSystemPrompt:
+            return "System prompt file is missing from the app bundle."
+        case .networkTimeout:
+            return "Network request timed out. Please check your connection."
+        case .apiError(let statusCode, let message):
+            if let message { return "API error \(statusCode): \(message)" }
+            return "API error (HTTP \(statusCode))."
+        case .invalidJSON(let raw):
+            return "Could not parse API response: \(raw.prefix(120))"
+        case .emptyResponse:
+            return "The API returned an empty response."
+        }
+    }
 }
 
 // MARK: - ClaudeService
@@ -109,19 +129,32 @@ actor ClaudeService {
                 return try await decodeWithRetry(crop, attemptsRemaining: attemptsRemaining - 1)
             }
             throw DecoderError.networkTimeout
+        } catch {
+            print("[NomLens] ❌ decodeWithRetry caught: \(error) (type: \(type(of: error)))")
+            throw error
         }
     }
 
     private func performDecode(_ crop: CharacterCrop) async throws -> CharacterDecodeResult {
+        print("[NomLens] performDecode — crop id:\(crop.id) box:\(crop.boundingBox) imageSize:\(crop.image.size) hasCG:\(crop.image.cgImage != nil)")
         guard let jpeg = ImageUtilities.base64JPEG(from: crop.image) else {
+            print("[NomLens] ❌ base64JPEG returned nil for crop \(crop.id)")
             throw DecoderError.imageEncodingFailed
         }
+        print("[NomLens] ✅ base64JPEG OK — length: \(jpeg.count)")
 
         let request = try buildRequest(base64JPEG: jpeg)
         let (data, response) = try await httpClient.data(for: request)
 
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw DecoderError.apiError(statusCode: http.statusCode)
+        if let http = response as? HTTPURLResponse {
+            print("[NomLens] HTTP status: \(http.statusCode)")
+            if !(200..<300).contains(http.statusCode) {
+                let message = Self.extractErrorMessage(from: data)
+                if let body = String(data: data, encoding: .utf8) {
+                    print("[NomLens] ❌ API error body: \(body.prefix(500))")
+                }
+                throw DecoderError.apiError(statusCode: http.statusCode, message: message)
+            }
         }
 
         return try parseResponse(data)
@@ -190,6 +223,15 @@ actor ClaudeService {
         } catch {
             throw DecoderError.invalidJSON(stripped)
         }
+    }
+
+    /// Extracts the human-readable message from a Claude API error response.
+    private static func extractErrorMessage(from data: Data) -> String? {
+        struct APIError: Decodable {
+            struct Inner: Decodable { let message: String }
+            let error: Inner?
+        }
+        return try? JSONDecoder().decode(APIError.self, from: data).error?.message
     }
 
     /// Strips leading/trailing markdown code fences Claude sometimes adds,

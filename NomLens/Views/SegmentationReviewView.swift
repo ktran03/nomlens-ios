@@ -12,27 +12,23 @@ struct SegmentationReviewView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // Image with box overlays
-                GeometryReader { geo in
-                    let size = fittedSize(for: sourceImage.size, in: geo.size)
-                    let offsetX = (geo.size.width - size.width) / 2
-
-                    ZStack(alignment: .topLeading) {
-                        Image(uiImage: sourceImage)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-
-                        ForEach(crops) { crop in
-                            boxOverlay(crop: crop, imageSize: sourceImage.size,
-                                       displaySize: size, offsetX: offsetX)
+                // Image with box overlays.
+                // Using .overlay so the GeometryReader always matches the
+                // actual displayed image frame — no UIScreen dependency.
+                Image(uiImage: sourceImage)
+                    .resizable()
+                    .scaledToFit()
+                    .overlay(alignment: .topLeading) {
+                        GeometryReader { geo in
+                            ForEach(crops) { crop in
+                                boxOverlay(crop: crop,
+                                           imageNaturalSize: sourceImage.size,
+                                           displaySize: geo.size)
+                            }
                         }
                     }
-                    .frame(width: geo.size.width, height: size.height)
-                }
-                .frame(height: fittedHeight(for: sourceImage.size,
-                                             containerWidth: UIScreen.main.bounds.width - 32))
-                .padding(.horizontal)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.horizontal)
 
                 // Summary
                 HStack {
@@ -54,7 +50,9 @@ struct SegmentationReviewView: View {
                             .foregroundStyle(.secondary)
                     }
                 } else {
-                    Button(action: { vm.startDecoding() }) {
+                    Button {
+                        vm.startDecoding()
+                    } label: {
                         Text("Decode All (\(crops.count))")
                             .font(.title3.weight(.semibold))
                             .frame(maxWidth: .infinity)
@@ -82,30 +80,15 @@ struct SegmentationReviewView: View {
 
     @ViewBuilder
     private func boxOverlay(crop: CharacterCrop,
-                             imageSize: CGSize,
-                             displaySize: CGSize,
-                             offsetX: CGFloat) -> some View {
-        let scaleX = displaySize.width  / imageSize.width
-        let scaleY = displaySize.height / imageSize.height
+                             imageNaturalSize: CGSize,
+                             displaySize: CGSize) -> some View {
+        let scaleX = displaySize.width  / imageNaturalSize.width
+        let scaleY = displaySize.height / imageNaturalSize.height
         let b = crop.boundingBox
 
         Rectangle()
             .stroke(Color.accentColor, lineWidth: 1.5)
             .frame(width: b.width * scaleX, height: b.height * scaleY)
-            .offset(x: offsetX + b.minX * scaleX,
-                    y: b.minY * scaleY)
-    }
-
-    // MARK: - Geometry helpers
-
-    private func fittedSize(for imageSize: CGSize, in container: CGSize) -> CGSize {
-        let scale = min(container.width / imageSize.width,
-                        container.height / imageSize.height)
-        return CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-    }
-
-    private func fittedHeight(for imageSize: CGSize, containerWidth: CGFloat) -> CGFloat {
-        guard imageSize.width > 0 else { return 300 }
-        return containerWidth * imageSize.height / imageSize.width
+            .offset(x: b.minX * scaleX, y: b.minY * scaleY)
     }
 }
