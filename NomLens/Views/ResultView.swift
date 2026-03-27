@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Displays the decoded Han Nôm characters as a grid of cards,
 /// with a "Save" button to persist the session to SwiftData history.
