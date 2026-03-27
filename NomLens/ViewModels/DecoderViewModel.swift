@@ -59,6 +59,7 @@ final class DecoderViewModel: ObservableObject {
     private let segmentor: any ImageSegmenting
     let decoder: any CharacterDecoding
     var settings: PreprocessingSettings
+    private let exporter = CropExporter()
 
     private var currentTask: Task<Void, Never>?
 
@@ -207,6 +208,7 @@ final class DecoderViewModel: ObservableObject {
                 }
             }
             guard !Task.isCancelled else { return }
+            exporter.export(crops: crops, results: results)
             state = .done(results)
         } catch {
             guard !Task.isCancelled else { return }
