@@ -38,6 +38,15 @@ final class NomClassifier: OnDeviceClassifying, @unchecked Sendable {
         self.visionModel = try VNCoreMLModel(for: mlModel)
     }
 
+    /// Converts a hex codepoint string (e.g. `"4EBA"`) to its Unicode character (`"人"`).
+    /// Falls back to the identifier as-is if it isn't a valid codepoint.
+    private static func characterFromCodepoint(_ identifier: String) -> String {
+        guard let value = UInt32(identifier, radix: 16),
+              let scalar = Unicode.Scalar(value)
+        else { return identifier }
+        return String(scalar)
+    }
+
     func classify(crop: UIImage) async throws -> OnDeviceClassification? {
         guard let cgImage = crop.cgImage else { return nil }
 
@@ -54,7 +63,7 @@ final class NomClassifier: OnDeviceClassifying, @unchecked Sendable {
                     return
                 }
                 continuation.resume(returning: OnDeviceClassification(
-                    character: top.identifier,
+                    character: Self.characterFromCodepoint(top.identifier),
                     confidence: top.confidence
                 ))
             }
