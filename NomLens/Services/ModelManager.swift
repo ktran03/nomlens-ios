@@ -9,7 +9,7 @@ import CryptoKit
 /// ```json
 /// { "version": "1.0.0", "url": "https://…/nom_classifier_1.0.0.mlpackage.zip", "sha256": "abc123…" }
 /// ```
-struct ModelManifest: Decodable {
+struct ModelManifest: Codable {
     let version: String
     let url: URL
     let sha256: String
