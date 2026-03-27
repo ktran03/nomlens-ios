@@ -55,17 +55,21 @@ actor ModelManager {
     private let proxy:        ClassifierProxy
     private let httpClient:   HTTPClient
     private let modelsDir:    URL
+    /// Called on the main actor once a model is successfully loaded.
+    private let onReady:      (@MainActor () -> Void)?
 
     // MARK: - Init
 
     init(
         proxy: ClassifierProxy,
         httpClient: HTTPClient = URLSession.shared,
-        modelsDirectory: URL? = nil
+        modelsDirectory: URL? = nil,
+        onReady: (@MainActor () -> Void)? = nil
     ) {
         self.proxy      = proxy
         self.httpClient = httpClient
         self.modelsDir  = modelsDirectory ?? Self.defaultModelsDirectory()
+        self.onReady    = onReady
     }
 
     // MARK: - Public API
@@ -178,6 +182,9 @@ actor ModelManager {
             Task { await proxy.update(classifier) }
             setStoredVersion(version)
             print("[NomLens] ModelManager loaded model v\(version)")
+            if let onReady {
+                Task { @MainActor in onReady() }
+            }
         } catch {
             print("[NomLens] ModelManager failed to load model v\(version): \(error)")
         }

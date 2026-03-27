@@ -192,6 +192,14 @@ private struct CharacterCard: View {
                     .foregroundStyle(.primary)
             }
 
+            // Pinyin stored in notes as "pinyin: rén"
+            if let pinyin = result.notes?.hasPrefix("pinyin: ") == true
+                ? String(result.notes!.dropFirst("pinyin: ".count)) : nil {
+                Text(pinyin)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             if let meaning = result.meaning {
                 Text(meaning)
                     .font(.caption2)

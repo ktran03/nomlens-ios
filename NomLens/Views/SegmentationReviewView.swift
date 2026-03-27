@@ -6,6 +6,7 @@ struct SegmentationReviewView: View {
     let sourceImage: UIImage
     let crops: [CharacterCrop]
     @ObservedObject var vm: DecoderViewModel
+    let isModelReady: Bool
 
     let onDone: ([CharacterDecodeResult]) -> Void
 
@@ -53,15 +54,25 @@ struct SegmentationReviewView: View {
                     Button {
                         vm.startDecoding()
                     } label: {
-                        Text("Decode All (\(crops.count))")
-                            .font(.title3.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                        if isModelReady {
+                            Text("Decode All (\(crops.count))")
+                                .font(.title3.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.accentColor)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        } else {
+                            Label("Model Loading…", systemImage: "arrow.clockwise")
+                                .font(.title3.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.secondary.opacity(0.3))
+                                .foregroundStyle(.secondary)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                        }
                     }
-                    .disabled(vm.isWorking)
+                    .disabled(vm.isWorking || !isModelReady)
                     .padding(.horizontal)
                 }
             }

@@ -44,18 +44,24 @@ struct CharacterDecodeResult: Codable, Sendable {
 // MARK: - Factory helpers
 
 extension CharacterDecodeResult {
-    /// Result produced by the on-device classifier (no quocNgu / meaning — those
-    /// come from Claude or a dictionary lookup in a later phase).
-    static func onDevice(character: String, confidence: ConfidenceLevel) -> Self {
-        CharacterDecodeResult(
+    /// Result produced by the on-device classifier with optional dictionary lookup.
+    static func onDevice(
+        character: String,
+        confidence: ConfidenceLevel,
+        quocNgu: String? = nil,
+        mandarin: String? = nil,
+        meaning: String? = nil
+    ) -> Self {
+        let notes: String? = mandarin.map { "pinyin: \($0)" }
+        return CharacterDecodeResult(
             character: character,
             type: nil,
-            quocNgu: nil,
-            meaning: nil,
+            quocNgu: quocNgu,
+            meaning: meaning,
             confidence: confidence,
             alternateReadings: [],
             damageNoted: false,
-            notes: nil
+            notes: notes
         )
     }
 

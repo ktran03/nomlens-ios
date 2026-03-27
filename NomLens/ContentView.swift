@@ -9,10 +9,10 @@ import SwiftData
 private final class ServiceContainer: ObservableObject {
     let viewModel: DecoderViewModel?
     let setupError: String?
+    @Published var isModelReady = false
 
     init() {
-        let proxy   = ClassifierProxy()
-        let manager = ModelManager(proxy: proxy)
+        let proxy = ClassifierProxy()
 
         // Set to true to skip Claude and use on-device model only.
         // Useful for testing the Core ML model without burning API calls.
@@ -21,17 +21,23 @@ private final class ServiceContainer: ObservableObject {
         let decoder: any CharacterDecoding
         if onDeviceOnly {
             decoder = OnDeviceDecoder(proxy)
+            viewModel  = DecoderViewModel(decoder: decoder)
+            setupError = nil
         } else {
             guard let claude = try? ClaudeService() else {
                 viewModel  = nil
                 setupError = "CLAUDE_API_KEY not configured.\nAdd it to Config.xcconfig and re-run."
                 return
             }
-            decoder = RoutingDecoder(classifier: proxy, fallback: claude)
+            decoder    = RoutingDecoder(classifier: proxy, fallback: claude)
+            viewModel  = DecoderViewModel(decoder: decoder)
+            setupError = nil
         }
 
-        viewModel  = DecoderViewModel(decoder: decoder)
-        setupError = nil
+        // All stored properties are set — safe to capture self.
+        let manager = ModelManager(proxy: proxy) { [weak self] in
+            self?.isModelReady = true
+        }
 
         Task { await manager.loadStoredModel() }
         Task { await manager.checkForUpdates() }
@@ -61,13 +67,21 @@ private actor OnDeviceDecoder: CharacterDecoding {
         _ crops: [CharacterCrop],
         progress: @Sendable @escaping (Int, Int) -> Void
     ) async throws -> [CharacterDecodeResult] {
+        let dict = NomDictionary.shared
         var results: [CharacterDecodeResult] = []
         for (i, crop) in crops.enumerated() {
             if let hit = try? await classifier.classify(crop: crop.image) {
                 let level: CharacterDecodeResult.ConfidenceLevel =
                     hit.confidence >= 0.90 ? .high :
                     hit.confidence >= 0.60 ? .medium : .low
-                results.append(.onDevice(character: hit.character, confidence: level))
+                let entry = dict.lookup(hit.character)
+                results.append(.onDevice(
+                    character:   hit.character,
+                    confidence:  level,
+                    quocNgu:     entry?.vietnamese,
+                    mandarin:    entry?.mandarin,
+                    meaning:     entry?.definition
+                ))
             } else {
                 results.append(.unknown)
             }
@@ -168,6 +182,7 @@ struct ContentView: View {
                     sourceImage: wrapped.image,
                     crops: vm.segmentedCrops ?? [],
                     vm: vm,
+                    isModelReady: container.isModelReady,
                     onDone: { _ in
                         navPath.append(Route.results(wrapped))
                     }
