@@ -81,6 +81,11 @@ actor ModelManager {
         activate(modelURL: modelURL, version: version)
     }
 
+    /// Directly load a model from a local URL — for development/testing only.
+    func loadModel(at url: URL) {
+        activate(modelURL: url, version: url.deletingPathExtension().lastPathComponent)
+    }
+
     /// Hits the manifest endpoint and downloads a newer model if one exists.
     /// Safe to call in a background `Task` — never throws to the caller.
     func checkForUpdates() async {

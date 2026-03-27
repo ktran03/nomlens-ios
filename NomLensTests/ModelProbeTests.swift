@@ -11,7 +11,7 @@ import UIKit
 struct ModelProbeTests {
 
     private static let modelURL = URL(fileURLWithPath:
-        "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_1.0.0-probe.mlpackage"
+        "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_1.0.0-e17.mlpackage"
     )
 
     // MARK: - Load

@@ -11,22 +11,53 @@ private final class ServiceContainer: ObservableObject {
     let setupError: String?
 
     init() {
-        do {
-            let claude  = try ClaudeService()
-            let proxy   = ClassifierProxy()
-            let routing = RoutingDecoder(classifier: proxy, fallback: claude)
-            let manager = ModelManager(proxy: proxy)
+        let proxy   = ClassifierProxy()
+        let manager = ModelManager(proxy: proxy)
 
-            viewModel  = DecoderViewModel(decoder: routing)
-            setupError = nil
+        // Set to true to skip Claude and use on-device model only.
+        // Useful for testing the Core ML model without burning API calls.
+        let onDeviceOnly = true
 
-            // Restore the last-known-good model immediately, then check for updates.
-            Task { await manager.loadStoredModel() }
-            Task { await manager.checkForUpdates() }
-        } catch {
-            viewModel  = nil
-            setupError = "CLAUDE_API_KEY not configured.\nAdd it to Config.xcconfig and re-run."
+        let decoder: any CharacterDecoding
+        if onDeviceOnly {
+            decoder = RoutingDecoder(classifier: proxy, fallback: NullDecoder())
+        } else {
+            guard let claude = try? ClaudeService() else {
+                viewModel  = nil
+                setupError = "CLAUDE_API_KEY not configured.\nAdd it to Config.xcconfig and re-run."
+                return
+            }
+            decoder = RoutingDecoder(classifier: proxy, fallback: claude)
         }
+
+        viewModel  = DecoderViewModel(decoder: decoder)
+        setupError = nil
+
+        Task { await manager.loadStoredModel() }
+        Task { await manager.checkForUpdates() }
+
+        // Temporary: load the epoch-17 model directly for on-device testing.
+        // Remove once ModelManager OTA delivery is wired to a real endpoint.
+        Task {
+            let e17 = URL(fileURLWithPath: "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_1.0.0-e17.mlpackage")
+            if FileManager.default.fileExists(atPath: e17.path) {
+                await manager.loadModel(at: e17)
+            }
+        }
+    }
+}
+
+// MARK: - NullDecoder
+
+/// No-op fallback used when Claude is disabled (e.g. on-device testing).
+/// Returns `.unknown` for every crop so the app still renders results.
+private struct NullDecoder: CharacterDecoding, Sendable {
+    func decodeAll(
+        _ crops: [CharacterCrop],
+        progress: @Sendable @escaping (Int, Int) -> Void
+    ) async throws -> [CharacterDecodeResult] {
+        for (i, _) in crops.enumerated() { progress(i + 1, crops.count) }
+        return crops.map { _ in .unknown }
     }
 }
 
