@@ -20,7 +20,7 @@ private final class ServiceContainer: ObservableObject {
 
         let decoder: any CharacterDecoding
         if onDeviceOnly {
-            decoder = RoutingDecoder(classifier: proxy, fallback: NullDecoder())
+            decoder = OnDeviceDecoder(proxy)
         } else {
             guard let claude = try? ClaudeService() else {
                 viewModel  = nil
@@ -49,15 +49,31 @@ private final class ServiceContainer: ObservableObject {
 
 // MARK: - NullDecoder
 
-/// No-op fallback used when Claude is disabled (e.g. on-device testing).
-/// Returns `.unknown` for every crop so the app still renders results.
-private struct NullDecoder: CharacterDecoding, Sendable {
+/// On-device-only decoder for testing — always returns whatever the model
+/// produces, no confidence threshold cutoff. Confidence maps to badge colour:
+/// ≥90% → high (green), 60–90% → medium (yellow), <60% → low (red).
+private actor OnDeviceDecoder: CharacterDecoding {
+    private let classifier: ClassifierProxy
+
+    init(_ classifier: ClassifierProxy) { self.classifier = classifier }
+
     func decodeAll(
         _ crops: [CharacterCrop],
         progress: @Sendable @escaping (Int, Int) -> Void
     ) async throws -> [CharacterDecodeResult] {
-        for (i, _) in crops.enumerated() { progress(i + 1, crops.count) }
-        return crops.map { _ in .unknown }
+        var results: [CharacterDecodeResult] = []
+        for (i, crop) in crops.enumerated() {
+            if let hit = try? await classifier.classify(crop: crop.image) {
+                let level: CharacterDecodeResult.ConfidenceLevel =
+                    hit.confidence >= 0.90 ? .high :
+                    hit.confidence >= 0.60 ? .medium : .low
+                results.append(.onDevice(character: hit.character, confidence: level))
+            } else {
+                results.append(.unknown)
+            }
+            progress(i + 1, crops.count)
+        }
+        return results
     }
 }
 
