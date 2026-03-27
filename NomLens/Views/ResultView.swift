@@ -207,6 +207,8 @@ private struct CharacterCard: View {
             } else {
                 confidenceBadge
             }
+
+            trainingBadge
         }
         .padding(10)
         .frame(minHeight: 140)
@@ -214,6 +216,18 @@ private struct CharacterCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+    }
+
+    @ViewBuilder
+    private var trainingBadge: some View {
+        let inSet = TrainingSet.contains(result.character)
+        Text(inSet ? "v1 ✓" : "not in v1")
+            .font(.system(size: 9).weight(.semibold))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(inSet ? Color.blue.opacity(0.12) : Color.gray.opacity(0.10))
+            .foregroundStyle(inSet ? Color.blue : Color.secondary)
+            .clipShape(Capsule())
     }
 
     @ViewBuilder
