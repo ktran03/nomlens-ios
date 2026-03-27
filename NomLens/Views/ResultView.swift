@@ -12,7 +12,27 @@ struct ResultView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    @State private var saved = false
+    @State private var saved: Bool
+
+    init(sourceImage: UIImage, results: [CharacterDecodeResult], cropImages: [UIImage]) {
+        self.sourceImage = sourceImage
+        self.results = results
+        self.cropImages = cropImages
+        self._saved = State(initialValue: false)
+    }
+
+    /// Reconstruct a `ResultView` from a persisted `DecodingSession` (already saved).
+    init(session: DecodingSession) {
+        self.sourceImage = session.sourceImageData.flatMap { UIImage(data: $0) } ?? UIImage()
+        self.results = {
+            guard let data = session.characterResultsJSON,
+                  let decoded = try? JSONDecoder().decode([CharacterDecodeResult].self, from: data)
+            else { return [] }
+            return decoded
+        }()
+        self.cropImages = []
+        self._saved = State(initialValue: true)
+    }
 
     // MARK: - Layout
 

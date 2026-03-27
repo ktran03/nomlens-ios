@@ -19,7 +19,11 @@ struct HistoryView: View {
             } else {
                 List {
                     ForEach(sessions) { session in
-                        SessionRow(session: session)
+                        NavigationLink {
+                            ResultView(session: session)
+                        } label: {
+                            SessionRow(session: session)
+                        }
                     }
                     .onDelete(perform: delete)
                 }
