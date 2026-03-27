@@ -41,6 +41,39 @@ struct CharacterDecodeResult: Codable, Sendable {
     }
 }
 
+// MARK: - Factory helpers
+
+extension CharacterDecodeResult {
+    /// Result produced by the on-device classifier (no quocNgu / meaning — those
+    /// come from Claude or a dictionary lookup in a later phase).
+    static func onDevice(character: String, confidence: ConfidenceLevel) -> Self {
+        CharacterDecodeResult(
+            character: character,
+            type: nil,
+            quocNgu: nil,
+            meaning: nil,
+            confidence: confidence,
+            alternateReadings: [],
+            damageNoted: false,
+            notes: nil
+        )
+    }
+
+    /// Placeholder used when no result could be produced.
+    static var unknown: Self {
+        CharacterDecodeResult(
+            character: nil,
+            type: nil,
+            quocNgu: nil,
+            meaning: nil,
+            confidence: .none,
+            alternateReadings: [],
+            damageNoted: false,
+            notes: nil
+        )
+    }
+}
+
 // MARK: - Supporting enums
 
 extension CharacterDecodeResult {
