@@ -160,12 +160,39 @@ actor ModelManager {
 
     private func activate(modelURL: URL, version: String) {
         do {
-            let classifier = try NomClassifier(modelURL: modelURL)
+            // Use a cached .mlmodelc if available — avoids recompiling on every launch.
+            let loadURL = compiledURL(for: version) ?? modelURL
+            let classifier = try NomClassifier(modelURL: loadURL)
+
+            // If we compiled from a .mlpackage, cache the result for next launch.
+            if loadURL == modelURL, modelURL.pathExtension != "mlmodelc" {
+                cacheCompiledModel(from: modelURL, version: version)
+            }
+
             Task { await proxy.update(classifier) }
             setStoredVersion(version)
             print("[NomLens] ModelManager loaded model v\(version)")
         } catch {
             print("[NomLens] ModelManager failed to load model v\(version): \(error)")
+        }
+    }
+
+    private func compiledURL(for version: String) -> URL? {
+        let url = modelsDir.appendingPathComponent("\(version).mlmodelc")
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
+    private func cacheCompiledModel(from packageURL: URL, version: String) {
+        do {
+            let temp = try MLModel.compileModel(at: packageURL)
+            let dest = modelsDir.appendingPathComponent("\(version).mlmodelc")
+            if FileManager.default.fileExists(atPath: dest.path) {
+                try FileManager.default.removeItem(at: dest)
+            }
+            try FileManager.default.moveItem(at: temp, to: dest)
+            print("[NomLens] ModelManager cached compiled model v\(version)")
+        } catch {
+            print("[NomLens] ModelManager compile cache failed (non-fatal): \(error)")
         }
     }
 

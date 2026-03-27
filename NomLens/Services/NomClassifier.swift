@@ -33,8 +33,19 @@ final class NomClassifier: OnDeviceClassifying, @unchecked Sendable {
 
     private let visionModel: VNCoreMLModel
 
+    /// Load from a `.mlpackage` (uncompiled) or `.mlmodelc` (pre-compiled).
+    /// Pass `compiledURL` when `ModelManager` has already compiled and cached
+    /// the model — avoids recompiling on every launch.
     init(modelURL: URL) throws {
-        let mlModel = try MLModel(contentsOf: modelURL)
+        let compiledURL: URL
+        if modelURL.pathExtension == "mlmodelc" {
+            compiledURL = modelURL
+        } else {
+            // MLModel.compileModel writes to a system temp directory.
+            // ModelManager moves the result to a stable cache path after init.
+            compiledURL = try MLModel.compileModel(at: modelURL)
+        }
+        let mlModel = try MLModel(contentsOf: compiledURL)
         self.visionModel = try VNCoreMLModel(for: mlModel)
     }
 
