@@ -6,6 +6,8 @@ import SwiftData
 struct ResultView: View {
     let sourceImage: UIImage
     let results: [CharacterDecodeResult]
+    /// Original crop images in the same order as `results`.
+    let cropImages: [UIImage]
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -35,8 +37,11 @@ struct ResultView: View {
 
                 // Character grid
                 LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(Array(results.enumerated()), id: \.offset) { _, result in
-                        CharacterCard(result: result)
+                    ForEach(Array(results.enumerated()), id: \.offset) { index, result in
+                        CharacterCard(
+                            result: result,
+                            cropImage: index < cropImages.count ? cropImages[index] : nil
+                        )
                     }
                 }
                 .padding(.horizontal)
@@ -92,17 +97,30 @@ struct ResultView: View {
 
 private struct CharacterCard: View {
     let result: CharacterDecodeResult
+    let cropImage: UIImage?
 
     var body: some View {
         VStack(spacing: 6) {
-            if let char = result.character {
-                Text(char)
-                    .font(.system(size: 42))
-                    .minimumScaleFactor(0.5)
-            } else {
-                Image(systemName: "questionmark")
-                    .font(.system(size: 32))
-                    .foregroundStyle(.secondary)
+            // Side-by-side: original crop image + decoded character
+            HStack(spacing: 8) {
+                if let crop = cropImage {
+                    Image(uiImage: crop)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 36, height: 36)
+                        .background(Color(.tertiarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+
+                if let char = result.character {
+                    Text(char)
+                        .font(.system(size: 42))
+                        .minimumScaleFactor(0.5)
+                } else {
+                    Image(systemName: "questionmark")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.secondary)
+                }
             }
 
             if let qn = result.quocNgu {

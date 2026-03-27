@@ -50,6 +50,11 @@ final class DecoderViewModel: ObservableObject {
 
     @Published private(set) var state: DecoderState = .idle
 
+    /// Retains the crops used in the most recent decode pass so that
+    /// downstream views (e.g. ResultView) can show the original crop image
+    /// alongside the decoded character.
+    private(set) var lastCrops: [CharacterCrop] = []
+
     private let preprocessor: ImagePreprocessor
     private let segmentor: any ImageSegmenting
     let decoder: any CharacterDecoding
@@ -191,6 +196,7 @@ final class DecoderViewModel: ObservableObject {
     }
 
     private func runDecode(crops: [CharacterCrop]) async {
+        lastCrops = crops
         state = .decoding(progress: 0, total: crops.count)
         do {
             let results = try await decoder.decodeAll(crops) { done, total in

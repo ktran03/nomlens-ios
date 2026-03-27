@@ -120,8 +120,12 @@ struct ContentView: View {
             }
 
         case .results(let wrapped):
-            if let results = container.viewModel?.currentResults {
-                ResultView(sourceImage: wrapped.image, results: results)
+            if let vm = container.viewModel, let results = vm.currentResults {
+                ResultView(
+                    sourceImage: wrapped.image,
+                    results: results,
+                    cropImages: vm.lastCrops.map(\.image)
+                )
             }
         }
     }
