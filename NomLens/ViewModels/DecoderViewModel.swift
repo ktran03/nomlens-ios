@@ -208,7 +208,7 @@ final class DecoderViewModel: ObservableObject {
                 }
             }
             guard !Task.isCancelled else { return }
-            exporter.export(crops: crops, results: results)
+            exporter.export(crops: crops, results: results, inputSource: settings.inputSource)
             state = .done(results)
         } catch {
             guard !Task.isCancelled else { return }

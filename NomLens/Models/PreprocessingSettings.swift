@@ -92,6 +92,18 @@ extension PreprocessingSettings {
     }
 }
 
+// MARK: - Training metadata
+
+extension PreprocessingSettings {
+    /// Classifies the image source for training data labelling.
+    /// Stele and manuscript presets are used for physical photography;
+    /// everything else is assumed to be a digital/clean image.
+    var inputSource: String {
+        if self == .stele || self == .manuscript { return "manuscript_photo" }
+        return "digital"
+    }
+}
+
 // MARK: - PerspectiveQuad
 
 /// Four corner points for `CIPerspectiveCorrection`, in normalised image coordinates (0–1).
