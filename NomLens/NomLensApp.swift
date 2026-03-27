@@ -4,7 +4,7 @@ import SwiftData
 @main
 struct NomLensApp: App {
     var sharedModelContainer: ModelContainer = {
-        let schema = Schema([DecodingSession.self])
+        let schema = Schema([DecodingSession.self, CharacterCorrection.self])
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
         do {
             return try ModelContainer(for: schema, configurations: [config])

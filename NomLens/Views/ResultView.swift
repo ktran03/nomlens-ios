@@ -14,6 +14,9 @@ struct ResultView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var saved: Bool
+    @State private var correctionTarget: CorrectionTarget?
+    /// Maps result index → user-submitted corrected character.
+    @State private var corrections: [Int: String] = [:]
 
     init(sourceImage: UIImage, results: [CharacterDecodeResult], cropImages: [UIImage]) {
         self.sourceImage = sourceImage
@@ -61,8 +64,15 @@ struct ResultView: View {
                     ForEach(Array(results.enumerated()), id: \.offset) { index, result in
                         CharacterCard(
                             result: result,
-                            cropImage: index < cropImages.count ? cropImages[index] : nil
-                        )
+                            cropImage: index < cropImages.count ? cropImages[index] : nil,
+                            correctedCharacter: corrections[index]
+                        ) {
+                            correctionTarget = CorrectionTarget(
+                                index: index,
+                                result: result,
+                                cropImage: index < cropImages.count ? cropImages[index] : nil
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal)
@@ -86,6 +96,24 @@ struct ResultView: View {
         }
         .navigationTitle("Results")
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $correctionTarget) { target in
+            CorrectionSheet(
+                cropImage: target.cropImage,
+                original: target.result
+            ) { corrected in
+                corrections[target.index] = corrected
+                saveCorrection(target: target, corrected: corrected)
+            }
+        }
+    }
+
+    // MARK: - Correction target
+
+    struct CorrectionTarget: Identifiable {
+        let id = UUID()
+        let index: Int
+        let result: CharacterDecodeResult
+        let cropImage: UIImage?
     }
 
     // MARK: - Helpers
@@ -96,6 +124,17 @@ struct ResultView: View {
 
     private var fullMeaning: String {
         results.compactMap { $0.meaning }.joined(separator: "; ")
+    }
+
+    private func saveCorrection(target: CorrectionTarget, corrected: String) {
+        let cropData = target.cropImage.flatMap { ImageUtilities.jpegData(from: $0) }
+        let correction = CharacterCorrection(
+            cropImageData: cropData,
+            originalCharacter: target.result.character,
+            correctedCharacter: corrected,
+            originalConfidence: target.result.confidence.rawValue
+        )
+        modelContext.insert(correction)
     }
 
     private func save() {
@@ -119,10 +158,12 @@ struct ResultView: View {
 private struct CharacterCard: View {
     let result: CharacterDecodeResult
     let cropImage: UIImage?
+    let correctedCharacter: String?
+    let onTap: () -> Void
 
     var body: some View {
         VStack(spacing: 6) {
-            // Side-by-side: original crop image + decoded character
+            // Side-by-side: original crop image + decoded (or corrected) character
             HStack(spacing: 8) {
                 if let crop = cropImage {
                     Image(uiImage: crop)
@@ -133,7 +174,8 @@ private struct CharacterCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
 
-                if let char = result.character {
+                let displayChar = correctedCharacter ?? result.character
+                if let char = displayChar {
                     Text(char)
                         .font(.system(size: 42))
                         .minimumScaleFactor(0.5)
@@ -158,12 +200,20 @@ private struct CharacterCard: View {
                     .multilineTextAlignment(.center)
             }
 
-            confidenceBadge
+            if correctedCharacter != nil {
+                Label("Corrected", systemImage: "checkmark.circle.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.teal)
+            } else {
+                confidenceBadge
+            }
         }
         .padding(10)
         .frame(minHeight: 140)
         .background(Color(.secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
     }
 
     @ViewBuilder
