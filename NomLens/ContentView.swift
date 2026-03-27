@@ -4,7 +4,7 @@ import SwiftData
 
 // MARK: - Service container
 
-/// Creates `ClaudeService` once at startup and surfaces any configuration error.
+/// Creates all services once at startup and surfaces any configuration error.
 @MainActor
 private final class ServiceContainer: ObservableObject {
     let viewModel: DecoderViewModel?
@@ -12,11 +12,19 @@ private final class ServiceContainer: ObservableObject {
 
     init() {
         do {
-            let service = try ClaudeService()
-            viewModel = DecoderViewModel(decoder: service)
+            let claude  = try ClaudeService()
+            let proxy   = ClassifierProxy()
+            let routing = RoutingDecoder(classifier: proxy, fallback: claude)
+            let manager = ModelManager(proxy: proxy)
+
+            viewModel  = DecoderViewModel(decoder: routing)
             setupError = nil
+
+            // Restore the last-known-good model immediately, then check for updates.
+            Task { await manager.loadStoredModel() }
+            Task { await manager.checkForUpdates() }
         } catch {
-            viewModel = nil
+            viewModel  = nil
             setupError = "CLAUDE_API_KEY not configured.\nAdd it to Config.xcconfig and re-run."
         }
     }
