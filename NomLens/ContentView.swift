@@ -146,7 +146,7 @@ struct ContentView: View {
                 }
         }
         .environment(\.classifyDrawing) { [proxy = container.classifierProxy] image in
-            let hits = (try? await proxy.classifyTopN(crop: image, n: 5)) ?? []
+            let hits = (try? await proxy.classifyTopN(crop: image, n: 15)) ?? []
             return hits.map(\.character)
         }
         .sheet(isPresented: $showCamera) {
