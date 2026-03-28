@@ -60,25 +60,9 @@ struct PreprocessingView: View {
                         .padding(.horizontal)
                 }
 
-                Button(action: segment) {
-                    Group {
-                        if vm.isWorking {
-                            HStack(spacing: 10) {
-                                ProgressView().tint(.white)
-                                Text(workingLabel)
-                            }
-                        } else {
-                            Text("Segment Image")
-                        }
-                    }
-                    .font(.title3.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(vm.isWorking ? Color.accentColor.opacity(0.7) : Color.accentColor)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                SegmentButton(isWorking: vm.isWorking, label: workingLabel) {
+                    segment()
                 }
-                .disabled(vm.isWorking)
                 .padding(.horizontal)
                 .padding(.bottom)
             }
@@ -134,6 +118,46 @@ private extension PreprocessingView.Preset {
         case .stele:      return "High contrast + adaptive threshold for weathered stone carvings."
         case .manuscript: return "Moderate contrast boost for aged paper manuscripts."
         case .cleanPrint: return "Minimal processing for modern or clean printed text."
+        }
+    }
+}
+
+// MARK: - Segment button
+
+/// Custom tappable view — avoids `Button` so iOS cannot apply its own
+/// disabled/pressed tinting that washes out the label.
+private struct SegmentButton: View {
+    let isWorking: Bool
+    let label: String
+    let action: () -> Void
+
+    @State private var glowing = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            if isWorking {
+                ProgressView().tint(.white)
+            }
+            Text(isWorking ? label : "Segment Image")
+        }
+        .font(.title3.weight(.semibold))
+        .frame(maxWidth: .infinity)
+        .padding()
+        .background(isWorking ? Color.red : Color.accentColor)
+        .foregroundStyle(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: glowing ? .red.opacity(0.7) : .clear, radius: glowing ? 18 : 0)
+        .onTapGesture { if !isWorking { action() } }
+        .onChange(of: isWorking) { _, working in
+            if working {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    glowing = true
+                }
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    glowing = false
+                }
+            }
         }
     }
 }

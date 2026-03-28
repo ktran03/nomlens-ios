@@ -164,22 +164,31 @@ final class DecoderViewModel: ObservableObject {
 
     private func runSegment(image: UIImage, thenDecode: Bool) async {
         state = .preprocessing
-        guard let ciIn = ImageUtilities.ciImage(from: image) else {
-            state = .failed(DecoderError.imageEncodingFailed)
-            return
-        }
+        // Yield so SwiftUI can render the state change before heavy work begins.
+        await Task.yield()
 
-        let processed = preprocessor.process(image: ciIn, settings: settings)
+        // Run Core Image preprocessing off the main thread.
+        let prep = preprocessor
+        let currentSettings = settings
+        let preprocessed: UIImage? = await Task.detached(priority: .userInitiated) {
+            guard let ciIn = ImageUtilities.ciImage(from: image) else { return nil }
+            let processed = prep.process(image: ciIn, settings: currentSettings)
+            return ImageUtilities.uiImage(from: processed, context: prep.context)
+        }.value
+
         guard !Task.isCancelled else { return }
-
-        guard let uiProcessed = ImageUtilities.uiImage(from: processed,
-                                                        context: preprocessor.context) else {
+        guard let uiProcessed = preprocessed else {
             state = .failed(DecoderError.imageEncodingFailed)
             return
         }
 
         state = .segmenting
-        let segResult = await segmentor.segment(image: uiProcessed)
+        await Task.yield()
+
+        let seg = segmentor
+        let segResult = await Task.detached(priority: .userInitiated) {
+            await seg.segment(image: uiProcessed)
+        }.value
         guard !Task.isCancelled else { return }
 
         switch segResult {
