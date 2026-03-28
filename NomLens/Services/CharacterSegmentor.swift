@@ -350,120 +350,124 @@ struct CharacterSegmentor {
             }
         }
 
-        // Column ranges — grid-border mode or gap mode chosen automatically.
+        // ── Path A: column-first (standard) ─────────────────────────────────
+        // Good for vertical Han Nôm columns on clean/white paper where
+        // projection gaps reach the noise floor cleanly.
+        let colFirstCrops = buildColFirstCrops(
+            pixels: pixels, colInk: colInk, rowInk: rowInk,
+            w: w, h: h, threshold: threshold,
+            cgImage: cgImage, sourceImage: sourceImage
+        )
+
+        // ── Path B: row-first + valley splitting ──────────────────────────────
+        // Good for dense or colored-background images where column gaps
+        // don't reach the noise floor but still show a clear local minimum.
+        let rowFirstCrops = buildRowFirstCrops(
+            pixels: pixels, colInk: colInk, rowInk: rowInk,
+            w: w, h: h, threshold: threshold,
+            cgImage: cgImage, sourceImage: sourceImage
+        )
+
+        // Return whichever path found more individual characters.
+        print("[NomLens] projSeg colFirst=\(colFirstCrops.count) rowFirst=\(rowFirstCrops.count)")
+        return rowFirstCrops.count > colFirstCrops.count ? rowFirstCrops : colFirstCrops
+    }
+
+    // MARK: - Projection path A — column-first
+
+    private func buildColFirstCrops(
+        pixels: [UInt8], colInk: [Int], rowInk: [Int],
+        w: Int, h: Int, threshold: UInt8,
+        cgImage: CGImage, sourceImage: UIImage
+    ) -> [CharacterCrop] {
         let colRanges = characterRanges(projection: colInk, crossExtent: h, totalSize: w)
-
-        // Row-first fallback: if any column band is suspiciously wide
-        // (wider than 1/3 of image width), columns were likely merged.
-        // Try rows first, then columns within each row.
-        let maxColWidth = colRanges.map(\.count).max() ?? 0
-        if maxColWidth > w / 3 {
-            var rowRangesTop = characterRanges(projection: rowInk, crossExtent: w, totalSize: h)
-            // Valley-split any row band taller than 60 % of image height.
-            rowRangesTop = splitWideBands(projection: rowInk, bands: rowRangesTop,
-                                          maxWidth: h * 6 / 10, peakFraction: 0.65)
-            if rowRangesTop.count >= 2 {
-                var rowFirstCrops: [CharacterCrop] = []
-                for (rowIdx, rowRange) in rowRangesTop.enumerated() {
-                    var rowColInk = [Int](repeating: 0, count: w)
-                    for y in rowRange {
-                        let base = y * w
-                        for x in 0 ..< w where pixels[base + x] < threshold { rowColInk[x] += 1 }
-                    }
-                    var subColRanges = characterRanges(
-                        projection: rowColInk,
-                        crossExtent: rowRange.count,
-                        totalSize: w
-                    )
-                    // Valley-split any column band wider than 30 % of image width.
-                    subColRanges = splitWideBands(projection: rowColInk, bands: subColRanges,
-                                                  maxWidth: w * 3 / 10, peakFraction: 0.65)
-                    for (colIdx, colRange) in subColRanges.enumerated() {
-                        let pad = 3
-                        let x0 = max(0, colRange.lowerBound - pad)
-                        let y0 = max(0, rowRange.lowerBound - pad)
-                        let x1 = min(w, colRange.upperBound  + pad)
-                        let y1 = min(h, rowRange.upperBound  + pad)
-                        let pixelBox = CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
-                        let clamped  = clampedBox(pixelBox, imageWidth: CGFloat(w), imageHeight: CGFloat(h))
-                        guard clamped.width >= 20, clamped.height >= 20 else { continue }
-                        guard cellHasInk(in: clamped, pixels: pixels, imageWidth: w, threshold: threshold) else { continue }
-                        guard let croppedCG = cgImage.cropping(to: clamped) else { continue }
-                        let cropUI = UIImage(cgImage: croppedCG, scale: sourceImage.scale,
-                                             orientation: sourceImage.imageOrientation)
-                        let norm = CGRect(
-                            x:      clamped.minX / CGFloat(w),
-                            y:      1 - clamped.maxY / CGFloat(h),
-                            width:  clamped.width  / CGFloat(w),
-                            height: clamped.height / CGFloat(h)
-                        )
-                        rowFirstCrops.append(CharacterCrop(
-                            id: UUID(), image: cropUI, boundingBox: clamped,
-                            observationIndex: rowIdx, characterIndex: colIdx,
-                            normalizedBox: norm
-                        ))
-                    }
-                }
-                if rowFirstCrops.count > 1 { return rowFirstCrops }
-            }
-        }
-
         guard !colRanges.isEmpty else { return [] }
-
         var crops: [CharacterCrop] = []
-
         for (colIdx, colRange) in colRanges.enumerated() {
-            // Row projection scoped to this column band.
             var colRowInk = [Int](repeating: 0, count: h)
             for y in 0 ..< h {
                 let base = y * w
-                for x in colRange where pixels[base + x] < threshold {
-                    colRowInk[y] += 1
-                }
+                for x in colRange where pixels[base + x] < threshold { colRowInk[y] += 1 }
             }
-
-            let rowRanges = characterRanges(
-                projection: colRowInk,
-                crossExtent: colRange.count,
-                totalSize: h
-            )
-
+            let rowRanges = characterRanges(projection: colRowInk,
+                                            crossExtent: colRange.count, totalSize: h)
             for (rowIdx, rowRange) in rowRanges.enumerated() {
-                let pad = 3
-                let x0 = max(0, colRange.lowerBound - pad)
-                let y0 = max(0, rowRange.lowerBound - pad)
-                let x1 = min(w, colRange.upperBound  + pad)
-                let y1 = min(h, rowRange.upperBound  + pad)
-
-                let pixelBox = CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
-                let clamped  = clampedBox(pixelBox, imageWidth: CGFloat(w), imageHeight: CGFloat(h))
-                guard clamped.width >= 20, clamped.height >= 20 else { continue }
-
-                // Discard nearly-empty cells (empty grid slots, margins, noise).
-                guard cellHasInk(in: clamped, pixels: pixels, imageWidth: w, threshold: threshold)
+                guard let crop = makeCrop(colRange: colRange, rowRange: rowRange,
+                                          colIdx: colIdx, rowIdx: rowIdx,
+                                          pixels: pixels, w: w, h: h, threshold: threshold,
+                                          cgImage: cgImage, sourceImage: sourceImage)
                 else { continue }
-
-                guard let croppedCG = cgImage.cropping(to: clamped) else { continue }
-                let cropUI = UIImage(cgImage: croppedCG,
-                                     scale: sourceImage.scale,
-                                     orientation: sourceImage.imageOrientation)
-                let norm = CGRect(
-                    x:      clamped.minX / CGFloat(w),
-                    y:      1 - clamped.maxY / CGFloat(h),
-                    width:  clamped.width  / CGFloat(w),
-                    height: clamped.height / CGFloat(h)
-                )
-                crops.append(CharacterCrop(
-                    id: UUID(),
-                    image: cropUI,
-                    boundingBox: clamped,
-                    observationIndex: colIdx,
-                    characterIndex: rowIdx,
-                    normalizedBox: norm
-                ))
+                crops.append(crop)
             }
         }
         return crops
+    }
+
+    // MARK: - Projection path B — row-first + valley splitting
+
+    private func buildRowFirstCrops(
+        pixels: [UInt8], colInk: [Int], rowInk: [Int],
+        w: Int, h: Int, threshold: UInt8,
+        cgImage: CGImage, sourceImage: UIImage
+    ) -> [CharacterCrop] {
+        var rowRanges = characterRanges(projection: rowInk, crossExtent: w, totalSize: h)
+        rowRanges = splitWideBands(projection: rowInk, bands: rowRanges,
+                                   maxWidth: h * 6 / 10, peakFraction: 0.65)
+        guard rowRanges.count >= 2 else { return [] }
+
+        var crops: [CharacterCrop] = []
+        for (rowIdx, rowRange) in rowRanges.enumerated() {
+            var rowColInk = [Int](repeating: 0, count: w)
+            for y in rowRange {
+                let base = y * w
+                for x in 0 ..< w where pixels[base + x] < threshold { rowColInk[x] += 1 }
+            }
+            var colRanges = characterRanges(projection: rowColInk,
+                                            crossExtent: rowRange.count, totalSize: w)
+            colRanges = splitWideBands(projection: rowColInk, bands: colRanges,
+                                       maxWidth: w * 3 / 10, peakFraction: 0.65)
+            for (colIdx, colRange) in colRanges.enumerated() {
+                guard let crop = makeCrop(colRange: colRange, rowRange: rowRange,
+                                          colIdx: rowIdx, rowIdx: colIdx,
+                                          pixels: pixels, w: w, h: h, threshold: threshold,
+                                          cgImage: cgImage, sourceImage: sourceImage)
+                else { continue }
+                crops.append(crop)
+            }
+        }
+        return crops
+    }
+
+    // MARK: - Shared crop builder
+
+    private func makeCrop(
+        colRange: Range<Int>, rowRange: Range<Int>,
+        colIdx: Int, rowIdx: Int,
+        pixels: [UInt8], w: Int, h: Int, threshold: UInt8,
+        cgImage: CGImage, sourceImage: UIImage
+    ) -> CharacterCrop? {
+        let pad = 3
+        let x0 = max(0, colRange.lowerBound - pad)
+        let y0 = max(0, rowRange.lowerBound - pad)
+        let x1 = min(w, colRange.upperBound + pad)
+        let y1 = min(h, rowRange.upperBound + pad)
+        let pixelBox = CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+        let clamped  = clampedBox(pixelBox, imageWidth: CGFloat(w), imageHeight: CGFloat(h))
+        guard clamped.width >= 20, clamped.height >= 20 else { return nil }
+        guard cellHasInk(in: clamped, pixels: pixels, imageWidth: w, threshold: threshold)
+        else { return nil }
+        guard let croppedCG = cgImage.cropping(to: clamped) else { return nil }
+        let cropUI = UIImage(cgImage: croppedCG, scale: sourceImage.scale,
+                             orientation: sourceImage.imageOrientation)
+        let norm = CGRect(
+            x:      clamped.minX / CGFloat(w),
+            y:      1 - clamped.maxY / CGFloat(h),
+            width:  clamped.width  / CGFloat(w),
+            height: clamped.height / CGFloat(h)
+        )
+        return CharacterCrop(id: UUID(), image: cropUI, boundingBox: clamped,
+                             observationIndex: colIdx, characterIndex: rowIdx,
+                             normalizedBox: norm)
     }
 
     // MARK: - Character range detection
