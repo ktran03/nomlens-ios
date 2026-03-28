@@ -334,11 +334,9 @@ struct CharacterSegmentor {
         ) else { return [] }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: w, height: h))
 
-        // Binarize before projecting: convert to pure black (0) / white (255)
-        // using local block adaptive thresholding so that brown/aged backgrounds
-        // become white and only genuine ink strokes remain black. This makes
-        // gap regions between characters project to exactly zero.
-        localBinarize(pixels: &pixels, width: w, height: h)
+        // Binarize using Otsu's global threshold.
+        let otsu = adaptiveThreshold(pixels: pixels)
+        for i in pixels.indices { pixels[i] = pixels[i] < otsu ? 0 : 255 }
         let threshold = UInt8(128)   // pixels are now 0 or 255
 
         // Build column and row projections in one pass.
@@ -354,6 +352,62 @@ struct CharacterSegmentor {
 
         // Column ranges — grid-border mode or gap mode chosen automatically.
         let colRanges = characterRanges(projection: colInk, crossExtent: h, totalSize: w)
+
+        // Row-first fallback: if any column band is suspiciously wide
+        // (wider than 1/3 of image width), columns were likely merged.
+        // Try rows first, then columns within each row.
+        let maxColWidth = colRanges.map(\.count).max() ?? 0
+        if maxColWidth > w / 3 {
+            var rowRangesTop = characterRanges(projection: rowInk, crossExtent: w, totalSize: h)
+            // Valley-split any row band taller than 60 % of image height.
+            rowRangesTop = splitWideBands(projection: rowInk, bands: rowRangesTop,
+                                          maxWidth: h * 6 / 10, peakFraction: 0.65)
+            if rowRangesTop.count >= 2 {
+                var rowFirstCrops: [CharacterCrop] = []
+                for (rowIdx, rowRange) in rowRangesTop.enumerated() {
+                    var rowColInk = [Int](repeating: 0, count: w)
+                    for y in rowRange {
+                        let base = y * w
+                        for x in 0 ..< w where pixels[base + x] < threshold { rowColInk[x] += 1 }
+                    }
+                    var subColRanges = characterRanges(
+                        projection: rowColInk,
+                        crossExtent: rowRange.count,
+                        totalSize: w
+                    )
+                    // Valley-split any column band wider than 30 % of image width.
+                    subColRanges = splitWideBands(projection: rowColInk, bands: subColRanges,
+                                                  maxWidth: w * 3 / 10, peakFraction: 0.65)
+                    for (colIdx, colRange) in subColRanges.enumerated() {
+                        let pad = 3
+                        let x0 = max(0, colRange.lowerBound - pad)
+                        let y0 = max(0, rowRange.lowerBound - pad)
+                        let x1 = min(w, colRange.upperBound  + pad)
+                        let y1 = min(h, rowRange.upperBound  + pad)
+                        let pixelBox = CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+                        let clamped  = clampedBox(pixelBox, imageWidth: CGFloat(w), imageHeight: CGFloat(h))
+                        guard clamped.width >= 20, clamped.height >= 20 else { continue }
+                        guard cellHasInk(in: clamped, pixels: pixels, imageWidth: w, threshold: threshold) else { continue }
+                        guard let croppedCG = cgImage.cropping(to: clamped) else { continue }
+                        let cropUI = UIImage(cgImage: croppedCG, scale: sourceImage.scale,
+                                             orientation: sourceImage.imageOrientation)
+                        let norm = CGRect(
+                            x:      clamped.minX / CGFloat(w),
+                            y:      1 - clamped.maxY / CGFloat(h),
+                            width:  clamped.width  / CGFloat(w),
+                            height: clamped.height / CGFloat(h)
+                        )
+                        rowFirstCrops.append(CharacterCrop(
+                            id: UUID(), image: cropUI, boundingBox: clamped,
+                            observationIndex: rowIdx, characterIndex: colIdx,
+                            normalizedBox: norm
+                        ))
+                    }
+                }
+                if rowFirstCrops.count > 1 { return rowFirstCrops }
+            }
+        }
+
         guard !colRanges.isEmpty else { return [] }
 
         var crops: [CharacterCrop] = []
@@ -437,7 +491,10 @@ struct CharacterSegmentor {
         // background texture creates low-level ink counts in every gap, which
         // would otherwise merge all character bands into a single blob.
         let peak       = projection.max() ?? 1
-        let noiseFloor = peak / 10
+        // Noise floor at ~17 % of peak so that stroke halos in gap regions
+        // (typically 10-15 % of peak on aged/coloured backgrounds) are treated
+        // as background, not ink.  Still low enough to catch faint characters.
+        let noiseFloor = peak / 6
 
         let gridlineMaxWidth   = max(4, totalSize / 100)
         let gridlineMinDensity = crossExtent * 75 / 100
@@ -501,6 +558,87 @@ struct CharacterSegmentor {
             }
         }
         return merged
+    }
+
+    // MARK: - Valley splitting
+
+    /// Splits `band` at its deepest valley if the valley dips below
+    /// `peakFraction` of the smoothed peak inside that band.
+    /// Returns the original single-element array if no qualifying valley exists.
+    ///
+    /// Useful when characters are close enough that the gap projection never
+    /// reaches the noise floor, but still has a clear local minimum between them.
+    private func splitAtDeepestValley(
+        projection: [Int],
+        band: Range<Int>,
+        peakFraction: Double = 0.65,
+        label: String = ""
+    ) -> [Range<Int>] {
+        let count = band.count
+        guard count > 20 else { return [band] }
+
+        // Smooth to suppress per-pixel noise.
+        let win = max(3, count / 20)
+        let half = win / 2
+        var smoothed = [Double](repeating: 0, count: count)
+        for i in 0 ..< count {
+            var sum = 0.0; var cnt = 0
+            for j in max(0, i - half) ... min(count - 1, i + half) {
+                sum += Double(projection[band.lowerBound + j]); cnt += 1
+            }
+            smoothed[i] = cnt > 0 ? sum / Double(cnt) : 0
+        }
+
+        let peakVal  = smoothed.max() ?? 0
+        guard peakVal > 0 else { return [band] }
+        let valThresh = peakVal * peakFraction
+
+        // Search the middle 60 % of the band to avoid edge artifacts.
+        let margin = max(1, count / 5)
+        var deepestIdx = -1
+        var deepestVal = Double.infinity
+        for i in margin ..< (count - margin) {
+            if smoothed[i] < valThresh && smoothed[i] < deepestVal {
+                deepestVal = smoothed[i]; deepestIdx = i
+            }
+        }
+
+        guard deepestIdx > 0 else {
+            print("[Seg] valleySplit\(label.isEmpty ? "" : "[\(label)]"): no valley below \(Int(valThresh)) (peak=\(Int(peakVal)))")
+            return [band]
+        }
+        let splitAt = band.lowerBound + deepestIdx
+        print("[Seg] valleySplit\(label.isEmpty ? "" : "[\(label)]"): split \(band) at \(splitAt), valley=\(Int(deepestVal))/\(Int(peakVal)) (\(Int(deepestVal*100/peakVal))% of peak)")
+        return [band.lowerBound ..< splitAt, splitAt ..< band.upperBound]
+    }
+
+    /// Iteratively splits bands that are wider than `maxWidth` at their
+    /// deepest valley, up to `maxPasses` rounds.
+    private func splitWideBands(
+        projection: [Int],
+        bands: [Range<Int>],
+        maxWidth: Int,
+        peakFraction: Double = 0.65,
+        maxPasses: Int = 3,
+        label: String = ""
+    ) -> [Range<Int>] {
+        var result = bands
+        for pass in 0 ..< maxPasses {
+            var changed = false
+            var next: [Range<Int>] = []
+            for band in result {
+                if band.count > maxWidth {
+                    let sub = splitAtDeepestValley(projection: projection, band: band,
+                                                   peakFraction: peakFraction,
+                                                   label: "\(label)p\(pass)")
+                    if sub.count > 1 { changed = true; next.append(contentsOf: sub); continue }
+                }
+                next.append(band)
+            }
+            result = next
+            if !changed { break }
+        }
+        return result
     }
 
     // MARK: - Pixel helpers
