@@ -121,10 +121,36 @@ struct ContentView: View {
                     destination(for: route)
                 }
         }
+        .overlay { workingOverlay }
         .sheet(isPresented: $showCamera) {
             CameraView { image in
                 navPath.append(Route.preprocessing(WrappedImage(image: image)))
             }
+        }
+    }
+
+    @ViewBuilder
+    private var workingOverlay: some View {
+        if let vm = container.viewModel, vm.isWorking {
+            ZStack {
+                Color.black.opacity(0.45).ignoresSafeArea()
+                VStack(spacing: 14) {
+                    ProgressView().scaleEffect(1.6).tint(.white)
+                    Text(workingLabel(vm)).font(.headline).foregroundStyle(.white)
+                }
+                .padding(28)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+            }
+            .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+        }
+    }
+
+    private func workingLabel(_ vm: DecoderViewModel) -> String {
+        switch vm.state {
+        case .preprocessing: return "Preprocessing…"
+        case .segmenting:    return "Segmenting…"
+        case .decoding(let done, let total): return "Decoding \(done) / \(total)…"
+        default:             return "Working…"
         }
     }
 
