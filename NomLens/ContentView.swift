@@ -189,6 +189,9 @@ struct ContentView: View {
                     vm: vm,
                     onPicked: {
                         navPath.append(Route.cropEditor(wrapped))
+                    },
+                    onDone: {
+                        navPath.append(Route.results(wrapped))
                     }
                 )
             }

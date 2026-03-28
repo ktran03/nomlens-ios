@@ -2,12 +2,18 @@ import SwiftUI
 
 /// Shown when the two projection strategies produce different crop counts.
 /// Displays both options with thumbnails so the user can pick the better one.
+///
+/// - If "Edit crops" is on  → picking an option goes to CropEditorView (`onPicked`).
+/// - If "Edit crops" is off → picking an option decodes immediately; `onDone` fires when finished.
 struct SegmentationPickerView: View {
     let sourceImage: UIImage
     let optionA: [CharacterCrop]   // standard column-first
     let optionB: [CharacterCrop]   // row-first with valley splitting
     @ObservedObject var vm: DecoderViewModel
-    let onPicked: () -> Void
+    let onPicked: () -> Void       // navigate to crop editor
+    let onDone: () -> Void         // navigate to results (decode-direct path)
+
+    @State private var editAfterPick = false
 
     var body: some View {
         ScrollView {
@@ -18,6 +24,9 @@ struct SegmentationPickerView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
+                Toggle("Edit crops before decoding", isOn: $editAfterPick)
+                    .padding(.horizontal)
+
                 optionCard(label: "Standard", crops: optionA)
                 optionCard(label: "Valley split", crops: optionB)
             }
@@ -26,6 +35,9 @@ struct SegmentationPickerView: View {
         }
         .navigationTitle("Choose Segmentation")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: vm.isDone) { _, done in
+            if done { onDone() }
+        }
     }
 
     @ViewBuilder
@@ -75,10 +87,15 @@ struct SegmentationPickerView: View {
 
             // Pick button
             Button {
-                vm.chooseSegmentation(crops)
-                onPicked()
+                if editAfterPick {
+                    vm.chooseSegmentation(crops)
+                    onPicked()
+                } else {
+                    vm.startDecoding(crops: crops)
+                    // onDone() fires via .onChange(of: vm.isDone)
+                }
             } label: {
-                Text("Use this — \(crops.count) characters")
+                Text(editAfterPick ? "Edit crops (\(crops.count))" : "Use this — \(crops.count) characters")
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -86,6 +103,7 @@ struct SegmentationPickerView: View {
                     .foregroundStyle(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
             }
+            .disabled(vm.isWorking)
             .padding(.horizontal)
         }
         .padding(.vertical, 16)
