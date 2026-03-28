@@ -224,13 +224,36 @@ final class DecoderViewModel: ObservableObject {
         case .belowThreshold:
             state = .zeroDetected
         case .twoOptions(let a, let b):
-            state = .segmentedOptions(optionA: a, optionB: b)
+            // Re-crop display images from the original (un-preprocessed) camera image
+            // so thumbnails show the natural colour rather than the binarized version.
+            let optA = recropImages(a, from: image)
+            let optB = recropImages(b, from: image)
+            state = .segmentedOptions(optionA: optA, optionB: optB)
         case .characters(let crops):
+            let display = recropImages(crops, from: image)
             if thenDecode {
-                await runDecode(crops: crops)
+                await runDecode(crops: display)
             } else {
-                state = .segmented(crops)
+                state = .segmented(display)
             }
+        }
+    }
+
+    /// Replaces the `image` inside each crop with a fresh cut from `original`.
+    /// Bounding boxes are in pixel space and match the original since preprocessing
+    /// preserves image dimensions.
+    private func recropImages(_ crops: [CharacterCrop], from original: UIImage) -> [CharacterCrop] {
+        guard let cgImage = original.cgImage else { return crops }
+        return crops.map { crop in
+            guard let croppedCG = cgImage.cropping(to: crop.boundingBox) else { return crop }
+            let cropUI = UIImage(cgImage: croppedCG,
+                                 scale: original.scale,
+                                 orientation: original.imageOrientation)
+            return CharacterCrop(id: crop.id, image: cropUI,
+                                 boundingBox: crop.boundingBox,
+                                 observationIndex: crop.observationIndex,
+                                 characterIndex: crop.characterIndex,
+                                 normalizedBox: crop.normalizedBox)
         }
     }
 
