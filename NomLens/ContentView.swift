@@ -5,14 +5,34 @@ import SwiftData
 // MARK: - Service container
 
 /// Creates all services once at startup and surfaces any configuration error.
+// MARK: - Environment key for draw-to-classify
+
+/// Injected at the NavigationStack level so CorrectionSheet can run a
+/// user's drawing through the on-device model from anywhere in the tree.
+struct ClassifyDrawingKey: EnvironmentKey {
+    static let defaultValue: (@Sendable (UIImage) async -> [String])? = nil
+}
+
+extension EnvironmentValues {
+    var classifyDrawing: (@Sendable (UIImage) async -> [String])? {
+        get { self[ClassifyDrawingKey.self] }
+        set { self[ClassifyDrawingKey.self] = newValue }
+    }
+}
+
+// MARK: - Service container
+
+/// Creates all services once at startup and surfaces any configuration error.
 @MainActor
 private final class ServiceContainer: ObservableObject {
     let viewModel: DecoderViewModel?
+    let classifierProxy: ClassifierProxy
     let setupError: String?
     @Published var isModelReady = false
 
     init() {
         let proxy = ClassifierProxy()
+        self.classifierProxy = proxy
 
         // Set to true to skip Claude and use on-device model only.
         // Useful for testing the Core ML model without burning API calls.
@@ -124,6 +144,10 @@ struct ContentView: View {
                 .navigationDestination(for: Route.self) { route in
                     destination(for: route)
                 }
+        }
+        .environment(\.classifyDrawing) { [proxy = container.classifierProxy] image in
+            let hits = (try? await proxy.classifyTopN(crop: image, n: 5)) ?? []
+            return hits.map(\.character)
         }
         .sheet(isPresented: $showCamera) {
             CameraView { image in
