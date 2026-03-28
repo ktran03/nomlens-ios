@@ -40,9 +40,8 @@ struct CropEditorView: View {
                 .foregroundStyle(.secondary)
                 .padding(.vertical, 6)
 
-            // ── Scrollable image + overlays ───────────────────────────────────
-            ScrollView([.horizontal, .vertical]) {
-                Image(uiImage: sourceImage)
+            // ── Image + overlays ──────────────────────────────────────────────
+            Image(uiImage: sourceImage)
                     .resizable()
                     .scaledToFit()
                     .overlay(alignment: .topLeading) {
@@ -72,7 +71,6 @@ struct CropEditorView: View {
                                 .gesture(drawGesture(in: geo.size))
                         }
                     }
-            }
 
             Divider()
 
