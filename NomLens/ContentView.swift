@@ -45,7 +45,7 @@ private final class ServiceContainer: ObservableObject {
         // Temporary: load the epoch-17 model directly for on-device testing.
         // Remove once ModelManager OTA delivery is wired to a real endpoint.
         Task {
-            let e17 = URL(fileURLWithPath: "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_1.0.0-e17.mlpackage")
+            let e17 = URL(fileURLWithPath: "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_1.0.0.mlpackage")
             if FileManager.default.fileExists(atPath: e17.path) {
                 await manager.loadModel(at: e17)
             }

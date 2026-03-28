@@ -86,20 +86,7 @@ struct PreprocessingView: View {
         }
         .navigationTitle("Preprocessing")
         .navigationBarTitleDisplayMode(.inline)
-        .overlay {
-            if vm.isWorking {
-                ZStack {
-                    Color(.systemBackground).opacity(0.85).ignoresSafeArea()
-                    VStack(spacing: 16) {
-                        ProgressView().scaleEffect(1.5)
-                        Text(workingLabel)
-                            .font(.headline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .transition(.opacity.animation(.easeInOut(duration: 0.2)))
-            }
-        }
+        .overlay { progressOverlay }
         .onChange(of: vm.isSegmented) { _, segmented in
             if segmented, let crops = vm.segmentedCrops {
                 onSegmented(crops)
@@ -124,6 +111,22 @@ struct PreprocessingView: View {
             Button("Continue Anyway", role: .destructive) { onZeroDetected() }
         } message: {
             Text("Vision could not detect any characters. Try a different preset or adjust lighting.")
+        }
+    }
+
+    @ViewBuilder
+    private var progressOverlay: some View {
+        if vm.isWorking {
+            ZStack {
+                Color(.systemBackground).opacity(0.85).ignoresSafeArea()
+                VStack(spacing: 16) {
+                    ProgressView().scaleEffect(1.5)
+                    Text(workingLabel)
+                        .font(.headline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .transition(.opacity.animation(.easeInOut(duration: 0.2)))
         }
     }
 
