@@ -7,6 +7,7 @@ struct PreprocessingView: View {
     @ObservedObject var vm: DecoderViewModel
 
     let onSegmented: ([CharacterCrop]) -> Void
+    let onOptions: () -> Void
     let onZeroDetected: () -> Void
 
     @State private var preset: Preset = .default
@@ -74,6 +75,9 @@ struct PreprocessingView: View {
             if segmented, let crops = vm.segmentedCrops {
                 onSegmented(crops)
             }
+        }
+        .onChange(of: vm.isSegmentedOptions) { _, hasOptions in
+            if hasOptions { onOptions() }
         }
         .onChange(of: vm.isZeroDetected) { _, zero in
             if zero { showZeroAlert = true }

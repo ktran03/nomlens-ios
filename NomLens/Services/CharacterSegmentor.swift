@@ -22,30 +22,39 @@ struct CharacterSegmentor {
         let observations = await runVision(on: cgImage)
         let lineCrops    = cropsFromLines(observations: observations,
                                           cgImage: cgImage, sourceImage: image)
-        let projCrops    = projectionSegment(cgImage: cgImage, sourceImage: image)
-        var crops        = mergeCrops(primary: lineCrops, secondary: projCrops)
+        let (colFirstCrops, rowFirstCrops) = projectionSegment(cgImage: cgImage, sourceImage: image)
+        let cropsA = mergeCrops(primary: lineCrops, secondary: colFirstCrops)
+        let cropsB = mergeCrops(primary: lineCrops, secondary: rowFirstCrops)
 
-        // ── Upscale pass ──────────────────────────────────────────────────────
-        // Characters that are too small or densely packed at original scale
-        // become separable when enlarged. Scale up as much as possible while
-        // keeping the enlarged image within 5 000 px on either side.
+        print("[NomLens] Segmentor: lineCrops=\(lineCrops.count) colFirst=\(colFirstCrops.count) rowFirst=\(rowFirstCrops.count) → A=\(cropsA.count) B=\(cropsB.count)")
+
+        // ── Two-option picker ─────────────────────────────────────────────────
+        // When the two projection strategies disagree, let the user choose.
+        // Skip the upscale pass so the comparison renders quickly.
+        if cropsA.count != cropsB.count, !cropsA.isEmpty, !cropsB.isEmpty {
+            let optA = sortIntoReadingOrder(cropsA)
+            let optB = sortIntoReadingOrder(cropsB)
+            return .twoOptions(optA, optB)
+        }
+
+        // ── Auto-pick + upscale pass ──────────────────────────────────────────
+        var crops = cropsA.count >= cropsB.count ? cropsA : cropsB
+
         let capPx: CGFloat = 5_000
         let actualScale = capPx / CGFloat(max(cgImage.width, cgImage.height))
         if actualScale > 1.05, let enlarged = scaled(cgImage, by: actualScale) {
             let obsUp   = await runVision(on: enlarged)
             let lineUp  = cropsFromLines(observations: obsUp,
                                          cgImage: enlarged, sourceImage: image)
-            let projUp  = projectionSegment(cgImage: enlarged, sourceImage: image)
+            let (colUp, rowUp) = projectionSegment(cgImage: enlarged, sourceImage: image)
+            let projUp  = colUp.count >= rowUp.count ? colUp : rowUp
             let rawUp   = mergeCrops(primary: lineUp, secondary: projUp)
-            // Map bounding boxes back to original pixel space and re-crop.
             let factor  = 1.0 / actualScale
             let rescaled = rawUp.compactMap {
                 rescaledCrop($0, factor: factor, cgImage: cgImage, sourceImage: image)
             }
             crops = mergeCrops(primary: crops, secondary: rescaled)
         }
-
-        print("[NomLens] Segmentor: lineCrops=\(lineCrops.count) projCrops=\(projCrops.count) total=\(crops.count)")
 
         if crops.count < Self.minimumCharacterCount {
             return crops.isEmpty ? .zeroDetected : .belowThreshold(crops.count)
@@ -348,10 +357,10 @@ struct CharacterSegmentor {
     // The mode is selected per-axis independently, so a document can have
     // vertical grid lines but not horizontal ones (or vice versa).
 
-    private func projectionSegment(cgImage: CGImage, sourceImage: UIImage) -> [CharacterCrop] {
+    private func projectionSegment(cgImage: CGImage, sourceImage: UIImage) -> (colFirst: [CharacterCrop], rowFirst: [CharacterCrop]) {
         let w = cgImage.width
         let h = cgImage.height
-        guard w > 0, h > 0 else { return [] }
+        guard w > 0, h > 0 else { return ([], []) }
 
         // Greyscale bitmap — one byte per pixel, no alpha.
         var pixels = [UInt8](repeating: 255, count: w * h)
@@ -362,7 +371,7 @@ struct CharacterSegmentor {
             bytesPerRow: w,
             space: CGColorSpaceCreateDeviceGray(),
             bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else { return [] }
+        ) else { return ([], []) }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: w, height: h))
 
         // Binarize using Otsu's global threshold.
@@ -399,9 +408,7 @@ struct CharacterSegmentor {
             cgImage: cgImage, sourceImage: sourceImage
         )
 
-        // Return whichever path found more individual characters.
-        print("[NomLens] projSeg colFirst=\(colFirstCrops.count) rowFirst=\(rowFirstCrops.count)")
-        return rowFirstCrops.count > colFirstCrops.count ? rowFirstCrops : colFirstCrops
+        return (colFirst: colFirstCrops, rowFirst: rowFirstCrops)
     }
 
     // MARK: - Projection path A — column-first

@@ -29,6 +29,8 @@ enum DecoderState {
     case segmenting
     /// Segmentation complete — waiting for user to confirm before spending API calls.
     case segmented([CharacterCrop])
+    /// Two strategies produced different counts — waiting for user to choose one.
+    case segmentedOptions(optionA: [CharacterCrop], optionB: [CharacterCrop])
     case decoding(progress: Int, total: Int)
     case done([CharacterDecodeResult])
     case zeroDetected
@@ -128,6 +130,21 @@ final class DecoderViewModel: ObservableObject {
         return nil
     }
 
+    var segmentedOptions: ([CharacterCrop], [CharacterCrop])? {
+        if case .segmentedOptions(let a, let b) = state { return (a, b) }
+        return nil
+    }
+
+    var isSegmentedOptions: Bool {
+        if case .segmentedOptions = state { return true }
+        return false
+    }
+
+    /// Commit one of the two picker options and advance to the segmented state.
+    func chooseSegmentation(_ crops: [CharacterCrop]) {
+        state = .segmented(crops)
+    }
+
     var currentResults: [CharacterDecodeResult]? {
         if case .done(let r) = state { return r }
         return nil
@@ -196,6 +213,8 @@ final class DecoderViewModel: ObservableObject {
             state = .zeroDetected
         case .belowThreshold:
             state = .zeroDetected
+        case .twoOptions(let a, let b):
+            state = .segmentedOptions(optionA: a, optionB: b)
         case .characters(let crops):
             if thenDecode {
                 await runDecode(crops: crops)
