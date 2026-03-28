@@ -25,14 +25,12 @@ struct CharacterSegmentor {
         let projCrops    = projectionSegment(cgImage: cgImage, sourceImage: image)
         var crops        = mergeCrops(primary: lineCrops, secondary: projCrops)
 
-        // ── 2× upscale pass ───────────────────────────────────────────────────
+        // ── Upscale pass ──────────────────────────────────────────────────────
         // Characters that are too small or densely packed at original scale
-        // become separable when enlarged. We cap the upscale so the enlarged
-        // image never exceeds 5 000 px on either side (avoids excessive memory).
-        let upscale: CGFloat = 2.0
-        let capPx:   CGFloat = 5_000
-        let actualScale = min(upscale,
-                              capPx / CGFloat(max(cgImage.width, cgImage.height)))
+        // become separable when enlarged. Scale up as much as possible while
+        // keeping the enlarged image within 5 000 px on either side.
+        let capPx: CGFloat = 5_000
+        let actualScale = capPx / CGFloat(max(cgImage.width, cgImage.height))
         if actualScale > 1.05, let enlarged = scaled(cgImage, by: actualScale) {
             let obsUp   = await runVision(on: enlarged)
             let lineUp  = cropsFromLines(observations: obsUp,
