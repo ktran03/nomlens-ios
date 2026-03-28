@@ -131,26 +131,8 @@ struct ContentView: View {
 
     @ViewBuilder
     private var workingOverlay: some View {
-        if let vm = container.viewModel, vm.isWorking {
-            ZStack {
-                Color.black.opacity(0.45).ignoresSafeArea()
-                VStack(spacing: 14) {
-                    ProgressView().scaleEffect(1.6).tint(.white)
-                    Text(workingLabel(vm)).font(.headline).foregroundStyle(.white)
-                }
-                .padding(28)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
-            }
-            .transition(.opacity.animation(.easeInOut(duration: 0.2)))
-        }
-    }
-
-    private func workingLabel(_ vm: DecoderViewModel) -> String {
-        switch vm.state {
-        case .preprocessing: return "Preprocessing…"
-        case .segmenting:    return "Segmenting…"
-        case .decoding(let done, let total): return "Decoding \(done) / \(total)…"
-        default:             return "Working…"
+        if let vm = container.viewModel {
+            WorkingOverlay(vm: vm)
         }
     }
 
@@ -242,6 +224,39 @@ struct ContentView: View {
         }
         .padding()
         .navigationTitle("NomLens")
+    }
+}
+
+// MARK: - Working overlay
+
+/// Separate view so it can use @ObservedObject to subscribe to vm.state changes.
+/// ContentView itself only observes ServiceContainer, so inline access to
+/// vm.isWorking would never trigger a re-render when state changes.
+private struct WorkingOverlay: View {
+    @ObservedObject var vm: DecoderViewModel
+
+    var body: some View {
+        if vm.isWorking {
+            ZStack {
+                Color.black.opacity(0.45).ignoresSafeArea()
+                VStack(spacing: 14) {
+                    ProgressView().scaleEffect(1.6).tint(.white)
+                    Text(label).font(.headline).foregroundStyle(.white)
+                }
+                .padding(28)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+            }
+            .transition(.opacity.animation(.easeInOut(duration: 0.2)))
+        }
+    }
+
+    private var label: String {
+        switch vm.state {
+        case .preprocessing:             return "Preprocessing…"
+        case .segmenting:                return "Segmenting…"
+        case .decoding(let done, let total): return "Decoding \(done) / \(total)…"
+        default:                         return "Working…"
+        }
     }
 }
 
