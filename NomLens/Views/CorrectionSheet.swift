@@ -1,87 +1,146 @@
 import SwiftUI
-import UIKit
 
-/// Sheet that lets the user submit a corrected label for a decoded character.
+/// Detail sheet for a decoded character.
 ///
-/// The corrected value is returned via `onSave` — the caller decides where to
-/// persist it. This keeps the view free of SwiftData and straightforward to test.
+/// Shows the top model predictions as tappable buttons — tap one to accept it
+/// immediately. A text field below allows entering a fully custom correction.
 struct CorrectionSheet: View {
     let cropImage: UIImage?
     let original: CharacterDecodeResult
     let onSave: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var input: String = ""
+    @State private var customInput: String = ""
+
+    private let dict = NomDictionary.shared
+
+    // Top prediction + up to 4 alternates, all in one list.
+    private var candidates: [String] {
+        var all: [String] = []
+        if let c = original.character { all.append(c) }
+        all.append(contentsOf: original.alternateReadings)
+        return all
+    }
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 28) {
-                // Original crop + decoded character for reference
-                HStack(spacing: 20) {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // ── Crop image ────────────────────────────────────────────
                     if let crop = cropImage {
                         Image(uiImage: crop)
                             .resizable()
                             .scaledToFit()
-                            .frame(width: 80, height: 80)
+                            .frame(maxHeight: 120)
                             .background(Color(.tertiarySystemBackground))
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Decoded as")
+                    // ── Top predictions ───────────────────────────────────────
+                    if !candidates.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Top predictions")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+
+                            LazyVGrid(
+                                columns: [GridItem(.adaptive(minimum: 90), spacing: 10)],
+                                spacing: 10
+                            ) {
+                                ForEach(Array(candidates.enumerated()), id: \.offset) { idx, char in
+                                    candidateButton(char: char, isTop: idx == 0)
+                                }
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+
+                    // ── Custom input ──────────────────────────────────────────
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Enter a different character")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .textCase(.uppercase)
-                        if let char = original.character {
-                            Text(char)
-                                .font(.system(size: 52))
-                        } else {
-                            Text("Unknown")
-                                .font(.body)
-                                .foregroundStyle(.secondary)
+
+                        HStack {
+                            TextField("Han Nôm character", text: $customInput)
+                                .font(.system(size: 36))
+                                .multilineTextAlignment(.center)
+                                .padding()
+                                .background(Color(.secondarySystemBackground))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                            Button {
+                                let trimmed = customInput.trimmingCharacters(in: .whitespaces)
+                                guard !trimmed.isEmpty else { return }
+                                onSave(trimmed)
+                                dismiss()
+                            } label: {
+                                Text("Use")
+                                    .font(.body.weight(.semibold))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 14)
+                                    .background(Color.accentColor)
+                                    .foregroundStyle(.white)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                            .disabled(customInput.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     }
-                    Spacer()
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-
-                // Correction input
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Correct character")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textCase(.uppercase)
-                        .padding(.horizontal)
-
-                    TextField("Han Nôm character", text: $input)
-                        .font(.system(size: 40))
-                        .multilineTextAlignment(.center)
-                        .padding()
-                        .background(Color(.secondarySystemBackground))
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .padding(.horizontal)
-                }
-
-                Spacer()
+                .padding(.top, 20)
+                .padding(.bottom, 32)
             }
-            .padding(.top, 24)
-            .navigationTitle("Correct Character")
+            .navigationTitle("Choose Character")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let trimmed = input.trimmingCharacters(in: .whitespaces)
-                        guard !trimmed.isEmpty else { return }
-                        onSave(trimmed)
-                        dismiss()
-                    }
-                    .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .fontWeight(.semibold)
-                }
             }
         }
+    }
+
+    @ViewBuilder
+    private func candidateButton(char: String, isTop: Bool) -> some View {
+        let entry = dict.lookup(char)
+        Button {
+            onSave(char)
+            dismiss()
+        } label: {
+            VStack(spacing: 4) {
+                Text(char)
+                    .font(.system(size: 40))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+
+                if let vn = entry?.vietnamese {
+                    Text(vn)
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+
+                if let meaning = entry?.definition {
+                    Text(meaning)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 90)
+            .padding(8)
+            .background(isTop ? Color.accentColor.opacity(0.12) : Color(.secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isTop ? Color.accentColor : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
     }
 }

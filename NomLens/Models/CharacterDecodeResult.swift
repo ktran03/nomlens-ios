@@ -50,7 +50,8 @@ extension CharacterDecodeResult {
         confidence: ConfidenceLevel,
         quocNgu: String? = nil,
         mandarin: String? = nil,
-        meaning: String? = nil
+        meaning: String? = nil,
+        alternateReadings: [String] = []
     ) -> Self {
         let notes: String? = mandarin.map { "pinyin: \($0)" }
         return CharacterDecodeResult(
@@ -59,7 +60,7 @@ extension CharacterDecodeResult {
             quocNgu: quocNgu,
             meaning: meaning,
             confidence: confidence,
-            alternateReadings: [],
+            alternateReadings: alternateReadings,
             damageNoted: false,
             notes: notes
         )

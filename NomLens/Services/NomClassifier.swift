@@ -59,7 +59,12 @@ final class NomClassifier: OnDeviceClassifying, @unchecked Sendable {
     }
 
     func classify(crop: UIImage) async throws -> OnDeviceClassification? {
-        guard let cgImage = crop.cgImage else { return nil }
+        return try await classifyTopN(crop: crop, n: 1).first
+    }
+
+    /// Returns up to `n` predictions sorted by descending confidence.
+    func classifyTopN(crop: UIImage, n: Int) async throws -> [OnDeviceClassification] {
+        guard let cgImage = crop.cgImage else { return [] }
 
         return try await withCheckedThrowingContinuation { continuation in
             let request = VNCoreMLRequest(model: visionModel) { req, error in
@@ -67,18 +72,15 @@ final class NomClassifier: OnDeviceClassifying, @unchecked Sendable {
                     continuation.resume(throwing: error)
                     return
                 }
-                guard let results = req.results as? [VNClassificationObservation],
-                      let top = results.first
-                else {
-                    continuation.resume(returning: nil)
-                    return
+                let observations = (req.results as? [VNClassificationObservation]) ?? []
+                let top = observations.prefix(n).map {
+                    OnDeviceClassification(
+                        character: Self.characterFromCodepoint($0.identifier),
+                        confidence: $0.confidence
+                    )
                 }
-                continuation.resume(returning: OnDeviceClassification(
-                    character: Self.characterFromCodepoint(top.identifier),
-                    confidence: top.confidence
-                ))
+                continuation.resume(returning: top)
             }
-            // Center-crop scales the image to the model's expected input size.
             request.imageCropAndScaleOption = .centerCrop
 
             let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])

@@ -70,17 +70,20 @@ private actor OnDeviceDecoder: CharacterDecoding {
         let dict = NomDictionary.shared
         var results: [CharacterDecodeResult] = []
         for (i, crop) in crops.enumerated() {
-            if let hit = try? await classifier.classify(crop: crop.image) {
+            let hits = (try? await classifier.classifyTopN(crop: crop.image, n: 5)) ?? []
+            if let top = hits.first {
                 let level: CharacterDecodeResult.ConfidenceLevel =
-                    hit.confidence >= 0.90 ? .high :
-                    hit.confidence >= 0.60 ? .medium : .low
-                let entry = dict.lookup(hit.character)
+                    top.confidence >= 0.90 ? .high :
+                    top.confidence >= 0.60 ? .medium : .low
+                let entry = dict.lookup(top.character)
+                let alternates = hits.dropFirst().map { $0.character }
                 results.append(.onDevice(
-                    character:   hit.character,
-                    confidence:  level,
-                    quocNgu:     entry?.vietnamese,
-                    mandarin:    entry?.mandarin,
-                    meaning:     entry?.definition
+                    character:        top.character,
+                    confidence:       level,
+                    quocNgu:          entry?.vietnamese,
+                    mandarin:         entry?.mandarin,
+                    meaning:          entry?.definition,
+                    alternateReadings: alternates
                 ))
             } else {
                 results.append(.unknown)

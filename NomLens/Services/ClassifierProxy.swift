@@ -26,4 +26,14 @@ actor ClassifierProxy: OnDeviceClassifying {
         guard let inner else { return nil }
         return try await inner.classify(crop: crop)
     }
+
+    func classifyTopN(crop: UIImage, n: Int) async throws -> [OnDeviceClassification] {
+        guard let inner else { return [] }
+        // NomClassifier exposes classifyTopN; fall back to single result for fakes.
+        if let full = inner as? NomClassifier {
+            return try await full.classifyTopN(crop: crop, n: n)
+        }
+        guard let single = try await inner.classify(crop: crop) else { return [] }
+        return [single]
+    }
 }
