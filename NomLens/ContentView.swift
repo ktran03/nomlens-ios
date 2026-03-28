@@ -96,7 +96,7 @@ private actor OnDeviceDecoder: CharacterDecoding {
 private enum Route: Hashable {
     case preprocessing(WrappedImage)
     case segmentationPicker(WrappedImage)   // two options read from vm.segmentedOptions
-    case segmentationReview(WrappedImage)   // crops read from vm.segmentedCrops
+    case cropEditor(WrappedImage)           // crops read from vm.segmentedCrops
     case results(WrappedImage)              // results read from vm.currentResults
 }
 
@@ -168,7 +168,7 @@ struct ContentView: View {
                     sourceImage: wrapped.image,
                     vm: vm,
                     onSegmented: { _ in
-                        navPath.append(Route.segmentationReview(wrapped))
+                        navPath.append(Route.cropEditor(wrapped))
                     },
                     onOptions: {
                         navPath.append(Route.segmentationPicker(wrapped))
@@ -188,19 +188,19 @@ struct ContentView: View {
                     optionB: optB,
                     vm: vm,
                     onPicked: {
-                        navPath.append(Route.segmentationReview(wrapped))
+                        navPath.append(Route.cropEditor(wrapped))
                     }
                 )
             }
 
-        case .segmentationReview(let wrapped):
+        case .cropEditor(let wrapped):
             if let vm = container.viewModel {
-                SegmentationReviewView(
+                CropEditorView(
                     sourceImage: wrapped.image,
-                    crops: vm.segmentedCrops ?? [],
+                    initialCrops: vm.segmentedCrops ?? [],
                     vm: vm,
                     isModelReady: container.isModelReady,
-                    onDone: { _ in
+                    onDone: {
                         navPath.append(Route.results(wrapped))
                     }
                 )

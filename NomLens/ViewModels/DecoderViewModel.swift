@@ -100,6 +100,16 @@ final class DecoderViewModel: ObservableObject {
         return task
     }
 
+    /// Decode an explicit crop list — used by CropEditorView after the user
+    /// has manually added or removed crops.
+    @discardableResult
+    func startDecoding(crops: [CharacterCrop]) -> Task<Void, Never> {
+        currentTask?.cancel()
+        let task = Task { await runDecode(crops: crops) }
+        currentTask = task
+        return task
+    }
+
     /// Full pipeline (preprocess → segment → decode). Used by tests and the
     /// "decode everything automatically" path.
     @discardableResult
