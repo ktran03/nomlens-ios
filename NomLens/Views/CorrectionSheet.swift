@@ -146,10 +146,20 @@ struct CorrectionSheet: View {
 
     private var drawContent: some View {
         VStack(spacing: 16) {
+            // Crop reference
+            if let crop = cropImage {
+                Image(uiImage: crop)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 100)
+                    .background(Color(.tertiarySystemBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .padding(.top, 12)
+            }
+
             Text("Draw the character with your finger")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .padding(.top, 12)
 
             // Canvas
             DrawingCanvas(canvasView: $canvasView)
