@@ -187,7 +187,8 @@ struct ContentView: View {
                     optionA: optA,
                     optionB: optB,
                     vm: vm,
-                    onPicked: {
+                    onCustom: {
+                        vm.chooseSegmentation([])
                         navPath.append(Route.cropEditor(wrapped))
                     },
                     onDone: {
