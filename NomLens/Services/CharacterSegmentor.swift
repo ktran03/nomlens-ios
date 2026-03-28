@@ -18,34 +18,67 @@ struct CharacterSegmentor {
     func segment(image: UIImage) async -> SegmentationResult {
         guard let cgImage = image.cgImage else { return .zeroDetected }
 
+        // ── Original scale ────────────────────────────────────────────────────
         let observations = await runVision(on: cgImage)
+        let lineCrops    = cropsFromLines(observations: observations,
+                                          cgImage: cgImage, sourceImage: image)
+        let projCrops    = projectionSegment(cgImage: cgImage, sourceImage: image)
+        var crops        = mergeCrops(primary: lineCrops, secondary: projCrops)
 
-        // Strategy A — Vision line regions + per-line projection.
-        // Vision reliably finds TEXT LINE bounding boxes even when its
-        // characterBoxes are incomplete. Running column projection within
-        // each line is simple and catches characters Vision missed at edges.
-        let lineCrops = cropsFromLines(
-            observations: observations,
-            cgImage: cgImage,
-            sourceImage: image
-        )
+        // ── 2× upscale pass ───────────────────────────────────────────────────
+        // Characters that are too small or densely packed at original scale
+        // become separable when enlarged. We cap the upscale so the enlarged
+        // image never exceeds 5 000 px on either side (avoids excessive memory).
+        let upscale: CGFloat = 2.0
+        let capPx:   CGFloat = 5_000
+        let actualScale = min(upscale,
+                              capPx / CGFloat(max(cgImage.width, cgImage.height)))
+        if actualScale > 1.05, let enlarged = scaled(cgImage, by: actualScale) {
+            let obsUp   = await runVision(on: enlarged)
+            let lineUp  = cropsFromLines(observations: obsUp,
+                                         cgImage: enlarged, sourceImage: image)
+            let projUp  = projectionSegment(cgImage: enlarged, sourceImage: image)
+            let rawUp   = mergeCrops(primary: lineUp, secondary: projUp)
+            // Map bounding boxes back to original pixel space and re-crop.
+            let factor  = 1.0 / actualScale
+            let rescaled = rawUp.compactMap {
+                rescaledCrop($0, factor: factor, cgImage: cgImage, sourceImage: image)
+            }
+            crops = mergeCrops(primary: crops, secondary: rescaled)
+        }
 
-        // Strategy B — full-image projection.
-        // Handles vertical column text and images Vision completely ignores
-        // (e.g. clean digital characters, very dark/noisy backgrounds).
-        let projCrops = projectionSegment(cgImage: cgImage, sourceImage: image)
-
-        print("[NomLens] Segmentor: lineCrops=\(lineCrops.count) projCrops=\(projCrops.count)")
-
-        // Merge both sets — keep everything, deduplicate by bounding-box overlap.
-        // This way Vision's line detection and projection complement each other
-        // rather than compete.
-        let crops = mergeCrops(primary: lineCrops, secondary: projCrops)
+        print("[NomLens] Segmentor: lineCrops=\(lineCrops.count) projCrops=\(projCrops.count) total=\(crops.count)")
 
         if crops.count < Self.minimumCharacterCount {
             return crops.isEmpty ? .zeroDetected : .belowThreshold(crops.count)
         }
         return .characters(sortIntoReadingOrder(crops))
+    }
+
+    /// Re-crops a character box (detected in an upscaled image) from the
+    /// original-resolution image after scaling its bounding box back by `factor`.
+    private func rescaledCrop(
+        _ crop: CharacterCrop,
+        factor: CGFloat,
+        cgImage: CGImage,
+        sourceImage: UIImage
+    ) -> CharacterCrop? {
+        let origBox = CGRect(x: crop.boundingBox.minX * factor,
+                             y: crop.boundingBox.minY * factor,
+                             width:  crop.boundingBox.width  * factor,
+                             height: crop.boundingBox.height * factor)
+        let iw = CGFloat(cgImage.width), ih = CGFloat(cgImage.height)
+        let clamped = clampedBox(origBox, imageWidth: iw, imageHeight: ih)
+        guard clamped.width >= 10, clamped.height >= 10 else { return nil }
+        guard let croppedCG = cgImage.cropping(to: clamped) else { return nil }
+        let cropUI = UIImage(cgImage: croppedCG, scale: sourceImage.scale,
+                             orientation: sourceImage.imageOrientation)
+        let norm = CGRect(x: clamped.minX / iw, y: 1 - clamped.maxY / ih,
+                          width: clamped.width / iw, height: clamped.height / ih)
+        return CharacterCrop(id: UUID(), image: cropUI, boundingBox: clamped,
+                             observationIndex: crop.observationIndex,
+                             characterIndex: crop.characterIndex,
+                             normalizedBox: norm)
     }
 
     // MARK: - Per-line projection
