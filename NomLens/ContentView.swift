@@ -161,23 +161,9 @@ struct ContentView: View {
     @ViewBuilder
     private var root: some View {
         if let vm = container.viewModel {
-            ZStack(alignment: .bottom) {
-                HistoryView()
-
-                Button {
-                    vm.cancel()
-                    showCamera = true
-                } label: {
-                    Label("New Scan", systemImage: "camera.fill")
-                        .font(.title3.weight(.semibold))
-                        .padding(.horizontal, 32)
-                        .padding(.vertical, 14)
-                        .background(Color.accentColor)
-                        .foregroundStyle(.white)
-                        .clipShape(Capsule())
-                        .shadow(radius: 6, y: 3)
-                }
-                .padding(.bottom, 24)
+            HomeView {
+                vm.cancel()
+                showCamera = true
             }
         } else {
             setupErrorView
