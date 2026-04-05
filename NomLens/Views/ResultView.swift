@@ -84,7 +84,7 @@ struct ResultView: View {
                         .font(.title3.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(saved ? Color.green : Color.accentColor)
+                        .background(saved ? NomTheme.stone700 : NomTheme.lacquer500)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
@@ -211,7 +211,7 @@ private struct CharacterCard: View {
             if correctedCharacter != nil {
                 Label("Corrected", systemImage: "checkmark.circle.fill")
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.teal)
+                    .foregroundStyle(NomTheme.lacquer500)
             } else {
                 confidenceBadge
             }

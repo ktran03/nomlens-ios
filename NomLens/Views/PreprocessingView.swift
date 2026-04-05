@@ -147,10 +147,10 @@ private struct SegmentButton: View {
         .font(.title3.weight(.semibold))
         .frame(maxWidth: .infinity)
         .padding()
-        .background(isWorking ? Color.red : Color.accentColor)
+        .background(isWorking ? NomTheme.lacquer800 : NomTheme.lacquer500)
         .foregroundStyle(.white)
         .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: glowing ? .red.opacity(0.7) : .clear, radius: glowing ? 18 : 0)
+        .shadow(color: glowing ? NomTheme.lacquer500.opacity(0.6) : .clear, radius: glowing ? 18 : 0)
         .onTapGesture { if !isWorking { action() } }
         .onChange(of: isWorking) { _, working in
             if working {

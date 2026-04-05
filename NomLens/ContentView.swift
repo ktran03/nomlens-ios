@@ -34,9 +34,13 @@ private final class ServiceContainer: ObservableObject {
         let proxy = ClassifierProxy()
         self.classifierProxy = proxy
 
-        // Set to true to skip Claude and use on-device model only.
-        // Useful for testing the Core ML model without burning API calls.
+        // In DEBUG builds, bypass Claude and use the on-device model only.
+        // In release, the RoutingDecoder uses Claude as a low-confidence fallback.
+        #if DEBUG
         let onDeviceOnly = true
+        #else
+        let onDeviceOnly = false
+        #endif
 
         let decoder: any CharacterDecoding
         if onDeviceOnly {
@@ -62,14 +66,19 @@ private final class ServiceContainer: ObservableObject {
         Task { await manager.loadStoredModel() }
         Task { await manager.checkForUpdates() }
 
-        // Temporary: load the epoch-17 model directly for on-device testing.
-        // Remove once ModelManager OTA delivery is wired to a real endpoint.
+        // DEBUG only: load a local model file if present, bypassing OTA delivery.
+        // Set NOMlens_LOCAL_MODEL_PATH in your environment or edit this path for local dev.
+        // This block is stripped from release builds.
+        #if DEBUG
         Task {
-            let e17 = URL(fileURLWithPath: "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_1.0.0.mlpackage")
-            if FileManager.default.fileExists(atPath: e17.path) {
-                await manager.loadModel(at: e17)
+            let localModelPath = ProcessInfo.processInfo.environment["NOMlens_LOCAL_MODEL_PATH"]
+                ?? "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_v2.0.0.mlpackage"
+            let localURL = URL(fileURLWithPath: localModelPath)
+            if FileManager.default.fileExists(atPath: localURL.path) {
+                await manager.loadModel(at: localURL)
             }
         }
+        #endif
     }
 }
 

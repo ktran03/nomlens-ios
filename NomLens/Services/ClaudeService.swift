@@ -130,29 +130,32 @@ actor ClaudeService {
             }
             throw DecoderError.networkTimeout
         } catch {
+            #if DEBUG
             print("[NomLens] ❌ decodeWithRetry caught: \(error) (type: \(type(of: error)))")
+            #endif
             throw error
         }
     }
 
     private func performDecode(_ crop: CharacterCrop) async throws -> CharacterDecodeResult {
+        #if DEBUG
         print("[NomLens] performDecode — crop id:\(crop.id) box:\(crop.boundingBox) imageSize:\(crop.image.size) hasCG:\(crop.image.cgImage != nil)")
+        #endif
         guard let jpeg = ImageUtilities.base64JPEG(from: crop.image) else {
-            print("[NomLens] ❌ base64JPEG returned nil for crop \(crop.id)")
             throw DecoderError.imageEncodingFailed
         }
-        print("[NomLens] ✅ base64JPEG OK — length: \(jpeg.count)")
 
         let request = try buildRequest(base64JPEG: jpeg)
         let (data, response) = try await httpClient.data(for: request)
 
         if let http = response as? HTTPURLResponse {
-            print("[NomLens] HTTP status: \(http.statusCode)")
             if !(200..<300).contains(http.statusCode) {
                 let message = Self.extractErrorMessage(from: data)
+                #if DEBUG
                 if let body = String(data: data, encoding: .utf8) {
                     print("[NomLens] ❌ API error body: \(body.prefix(500))")
                 }
+                #endif
                 throw DecoderError.apiError(statusCode: http.statusCode, message: message)
             }
         }

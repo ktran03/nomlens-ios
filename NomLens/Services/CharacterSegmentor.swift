@@ -26,7 +26,9 @@ struct CharacterSegmentor {
         let cropsA = mergeCrops(primary: lineCrops, secondary: colFirstCrops)
         let cropsB = mergeCrops(primary: lineCrops, secondary: rowFirstCrops)
 
+        #if DEBUG
         print("[NomLens] Segmentor: lineCrops=\(lineCrops.count) colFirst=\(colFirstCrops.count) rowFirst=\(rowFirstCrops.count) → A=\(cropsA.count) B=\(cropsB.count)")
+        #endif
 
         // ── Two-option picker ─────────────────────────────────────────────────
         // When the two projection strategies disagree, let the user choose.
@@ -646,11 +648,15 @@ struct CharacterSegmentor {
         }
 
         guard deepestIdx > 0 else {
+            #if DEBUG
             print("[Seg] valleySplit\(label.isEmpty ? "" : "[\(label)]"): no valley below \(Int(valThresh)) (peak=\(Int(peakVal)))")
+            #endif
             return [band]
         }
         let splitAt = band.lowerBound + deepestIdx
+        #if DEBUG
         print("[Seg] valleySplit\(label.isEmpty ? "" : "[\(label)]"): split \(band) at \(splitAt), valley=\(Int(deepestVal))/\(Int(peakVal)) (\(Int(deepestVal*100/peakVal))% of peak)")
+        #endif
         return [band.lowerBound ..< splitAt, splitAt ..< band.upperBound]
     }
 
