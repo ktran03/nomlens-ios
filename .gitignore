@@ -1,6 +1,10 @@
 # API keys — never commit
 NomLens/Config.xcconfig
 
+# Trained model weights — delivered via OTA, not stored in repo
+*.mlpackage
+*.mlmodelc
+
 # Xcode
 *.xcuserstate
 xcuserdata/

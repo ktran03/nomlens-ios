@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import CoreML
+import ZIPFoundation
 
 // MARK: - Manifest
 
@@ -25,6 +26,8 @@ enum ModelManagerError: Error {
     case httpError(Int)
     /// Model file exists on disk but Core ML refused to load it.
     case loadFailed(Error)
+    /// No .mlpackage found inside the downloaded zip.
+    case mlpackageNotFoundInZip
 }
 
 // MARK: - ModelManager
@@ -45,7 +48,7 @@ actor ModelManager {
     // MARK: - Configuration
 
     /// Override in tests or staging builds.
-    static var manifestURL = URL(string: "https://api.nomlens.app/model/manifest.json")!
+    static var manifestURL = URL(string: "https://pub-0102465855154079b794681a5533bc05.r2.dev/manifest.json")!
 
     /// Name and version of the model bundled with the app binary.
     /// Update these when shipping a new bundled model.
@@ -155,34 +158,53 @@ actor ModelManager {
     }
 
     private func download(manifest: ModelManifest) async throws {
-        // Download to a temp file first so a partial download never replaces a good model.
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".mlpackage")
+        let fm = FileManager.default
 
+        // 1. Download zip to a temp file.
+        let tempZip = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".zip")
         let request = URLRequest(url: manifest.url)
         let (data, response) = try await httpClient.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw ModelManagerError.httpError(http.statusCode)
         }
-        try data.write(to: tempURL, options: .atomic)
+        try data.write(to: tempZip, options: .atomic)
 
-        // Verify before touching the models directory.
+        // 2. Verify SHA-256 of the zip before touching anything.
         do {
-            try verifyHash(fileURL: tempURL, expectedHex: manifest.sha256)
+            try verifyHash(fileURL: tempZip, expectedHex: manifest.sha256)
         } catch {
-            try? FileManager.default.removeItem(at: tempURL)
+            try? fm.removeItem(at: tempZip)
             throw error
         }
 
-        // Move verified file into models directory.
-        try FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-        let destURL = modelsDir.appendingPathComponent("\(manifest.version).mlpackage")
-        if FileManager.default.fileExists(atPath: destURL.path) {
-            try FileManager.default.removeItem(at: destURL)
+        // 3. Extract zip to a temp directory.
+        let tempExtract = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try fm.createDirectory(at: tempExtract, withIntermediateDirectories: true)
+        do {
+            try fm.unzipItem(at: tempZip, to: tempExtract)
+        } catch {
+            try? fm.removeItem(at: tempZip)
+            try? fm.removeItem(at: tempExtract)
+            throw error
         }
-        try FileManager.default.moveItem(at: tempURL, to: destURL)
+        try? fm.removeItem(at: tempZip)
 
-        // Activate new model; persist version only after successful load.
+        // 4. Find the .mlpackage inside the extracted content.
+        let contents = (try? fm.contentsOfDirectory(at: tempExtract,
+                                                     includingPropertiesForKeys: nil)) ?? []
+        guard let packageURL = contents.first(where: { $0.pathExtension == "mlpackage" }) else {
+            try? fm.removeItem(at: tempExtract)
+            throw ModelManagerError.mlpackageNotFoundInZip
+        }
+
+        // 5. Move verified package into the models directory.
+        try fm.createDirectory(at: modelsDir, withIntermediateDirectories: true)
+        let destURL = modelsDir.appendingPathComponent("\(manifest.version).mlpackage")
+        if fm.fileExists(atPath: destURL.path) { try fm.removeItem(at: destURL) }
+        try fm.moveItem(at: packageURL, to: destURL)
+        try? fm.removeItem(at: tempExtract)
+
+        // 6. Activate; version persisted only after successful load.
         activate(modelURL: destURL, version: manifest.version)
     }
 
