@@ -60,15 +60,16 @@ private final class ServiceContainer: ObservableObject {
         }
 
         Task { await manager.loadStoredModel() }
+        Task { await manager.loadBundledModelIfNeeded() }
         Task { await manager.checkForUpdates() }
 
-        // DEBUG only: load a local model file if present, bypassing OTA delivery.
-        // Set NOMlens_LOCAL_MODEL_PATH in your environment or edit this path for local dev.
-        // This block is stripped from release builds.
+        // DEBUG only: load a local model file if present, bypassing bundle + OTA.
+        // Set NOMlens_LOCAL_MODEL_PATH in your environment or update the path below.
+        // This block is stripped from release builds — release uses the bundled model.
         #if DEBUG
         Task {
             let localModelPath = ProcessInfo.processInfo.environment["NOMlens_LOCAL_MODEL_PATH"]
-                ?? "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_v2.0.0.mlpackage"
+                ?? "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_v3.0.0.mlpackage"
             let localURL = URL(fileURLWithPath: localModelPath)
             if FileManager.default.fileExists(atPath: localURL.path) {
                 await manager.loadModel(at: localURL)
