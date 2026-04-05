@@ -1,0 +1,12 @@
+// Config.xcconfig.example
+//
+// Copy this file to Config.xcconfig and fill in your key.
+// Config.xcconfig is excluded from git — never commit real keys.
+//
+// Get a Claude API key at: https://console.anthropic.com
+//
+// The key is only used in DEBUG builds as a convenience for local development.
+// In release builds (and for end users), the key is entered in the app's Settings screen
+// and stored securely in the iOS Keychain.
+
+CLAUDE_API_KEY = your-claude-api-key-here

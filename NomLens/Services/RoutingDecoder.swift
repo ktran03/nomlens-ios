@@ -61,17 +61,25 @@ actor RoutingDecoder: CharacterDecoding {
     private func route(crop: CharacterCrop) async throws -> CharacterDecodeResult {
         // Classifier errors are non-fatal — treat them as low confidence and
         // fall through to Claude rather than surfacing an error to the user.
+        var bestOnDevice: CharacterDecodeResult? = nil
         if let hit = try? await classifier.classify(crop: crop.image) {
             if hit.confidence >= RoutingThreshold.accept {
                 return .onDevice(character: hit.character, confidence: .high)
             } else if hit.confidence >= RoutingThreshold.review {
                 return .onDevice(character: hit.character, confidence: .medium)
             }
+            // Below threshold — save result in case Claude is unavailable.
+            bestOnDevice = .onDevice(character: hit.character, confidence: .low)
         }
 
         // Escalate to Claude. Pass a no-op progress callback — progress is
         // already tracked at the RoutingDecoder level per crop.
-        let claudeResults = try await fallback.decodeAll([crop]) { _, _ in }
-        return claudeResults.first ?? .unknown
+        do {
+            let claudeResults = try await fallback.decodeAll([crop]) { _, _ in }
+            return claudeResults.first ?? bestOnDevice ?? .unknown
+        } catch DecoderError.missingAPIKey {
+            // No key configured — return best on-device result rather than failing.
+            return bestOnDevice ?? .unknown
+        }
     }
 }

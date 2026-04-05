@@ -9,6 +9,7 @@ struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showAbout = false
+    @State private var showSettings = false
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -33,16 +34,27 @@ struct HomeView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showAbout = true
-                } label: {
-                    Image(systemName: "info.circle")
-                        .foregroundStyle(.white.opacity(0.85))
+                HStack(spacing: 16) {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    Button {
+                        showAbout = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
                 }
             }
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
+        }
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
         }
     }
 

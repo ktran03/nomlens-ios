@@ -17,6 +17,8 @@ enum DecoderError: Error, Equatable {
     case imageEncodingFailed
     /// System prompt file missing from app bundle.
     case missingSystemPrompt
+    /// No Claude API key is configured (Keychain or bundle).
+    case missingAPIKey
     /// Network request timed out after all retries.
     case networkTimeout
     /// HTTP error from the Claude API (e.g. 401, 429, 500).
@@ -34,6 +36,8 @@ extension DecoderError: LocalizedError {
             return "Failed to encode image as JPEG."
         case .missingSystemPrompt:
             return "System prompt file is missing from the app bundle."
+        case .missingAPIKey:
+            return "No Claude API key configured. Add one in Settings to enable cloud fallback."
         case .networkTimeout:
             return "Network request timed out. Please check your connection."
         case .apiError(let statusCode, let message):
@@ -66,31 +70,24 @@ actor ClaudeService {
     // MARK: - Dependencies
 
     private let httpClient: HTTPClient
-    private let apiKey: String
     private let systemPrompt: String
 
     // MARK: - Init
 
+    /// Loads the system prompt from the bundle. Does not require an API key at init time —
+    /// the key is read from `APIKeyStore` at the moment each request is made.
     init(httpClient: HTTPClient = URLSession.shared) throws {
-        guard let key = Bundle.main.infoDictionary?["CLAUDE_API_KEY"] as? String,
-              !key.isEmpty else {
-            throw DecoderError.missingSystemPrompt // reuse until we add a dedicated key error
-        }
-
         guard let url = Bundle.main.url(forResource: "SystemPrompt", withExtension: "txt"),
               let prompt = try? String(contentsOf: url, encoding: .utf8) else {
             throw DecoderError.missingSystemPrompt
         }
-
         self.httpClient   = httpClient
-        self.apiKey       = key
         self.systemPrompt = prompt
     }
 
-    /// Internal init for tests — accepts explicit key and prompt, bypasses bundle loading.
-    init(httpClient: HTTPClient, apiKey: String, systemPrompt: String) {
+    /// Internal init for tests — accepts explicit prompt, bypasses bundle loading.
+    init(httpClient: HTTPClient, systemPrompt: String) {
         self.httpClient   = httpClient
-        self.apiKey       = apiKey
         self.systemPrompt = systemPrompt
     }
 
@@ -164,6 +161,9 @@ actor ClaudeService {
     }
 
     private func buildRequest(base64JPEG: String) throws -> URLRequest {
+        guard let apiKey = APIKeyStore.key else {
+            throw DecoderError.missingAPIKey
+        }
         var request = URLRequest(url: ClaudeService.endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json",      forHTTPHeaderField: "Content-Type")

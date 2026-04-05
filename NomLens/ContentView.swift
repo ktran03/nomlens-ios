@@ -45,18 +45,14 @@ private final class ServiceContainer: ObservableObject {
         let decoder: any CharacterDecoding
         if onDeviceOnly {
             decoder = OnDeviceDecoder(proxy)
-            viewModel  = DecoderViewModel(decoder: decoder)
-            setupError = nil
+        } else if let claude = try? ClaudeService() {
+            decoder = RoutingDecoder(classifier: proxy, fallback: claude)
         } else {
-            guard let claude = try? ClaudeService() else {
-                viewModel  = nil
-                setupError = "CLAUDE_API_KEY not configured.\nAdd it to Config.xcconfig and re-run."
-                return
-            }
-            decoder    = RoutingDecoder(classifier: proxy, fallback: claude)
-            viewModel  = DecoderViewModel(decoder: decoder)
-            setupError = nil
+            // System prompt missing — fall back to on-device only.
+            decoder = OnDeviceDecoder(proxy)
         }
+        viewModel  = DecoderViewModel(decoder: decoder)
+        setupError = nil
 
         // All stored properties are set — safe to capture self.
         let manager = ModelManager(proxy: proxy) { [weak self] in
