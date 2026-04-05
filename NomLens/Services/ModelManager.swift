@@ -52,8 +52,8 @@ actor ModelManager {
 
     /// Name and version of the model bundled with the app binary.
     /// Update these when shipping a new bundled model.
-    static let bundledModelName    = "NomLensClassifier_v3.0.0"
-    static let bundledModelVersion = "3.0.0"
+    static let bundledModelName    = "NomLensClassifier_v2.0.0"
+    static let bundledModelVersion = "2.0.0"
 
     private static let versionKey     = "nomModelVersion"
     private static let modelsDirName  = "NomLens/models"
