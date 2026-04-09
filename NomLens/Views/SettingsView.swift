@@ -10,7 +10,8 @@ struct SettingsView: View {
     @AppStorage(ModelManager.versionKey) private var storedModelVersion: String?
 
     private var activeModelVersion: String {
-        storedModelVersion ?? ModelManager.bundledModelVersion
+        _ = storedModelVersion // observe UserDefaults so the view refreshes on change
+        return ModelManager.activeVersion
     }
 
     var body: some View {

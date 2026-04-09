@@ -17,7 +17,6 @@ struct HomeView: View {
         ScrollView {
             VStack(spacing: 0) {
                 heroSection
-                statsStrip
                 scanButtonSection
                 missionQuoteSection
                 if sessions.isEmpty {
@@ -106,43 +105,6 @@ struct HomeView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minHeight: 340)
-    }
-
-    // MARK: - Stats strip
-
-    private var statsStrip: some View {
-        HStack(spacing: 0) {
-            statCell(value: "97.6%", label: "Accuracy")
-            statDivider
-            statCell(value: "<10ms", label: "Per character")
-            statDivider
-            statCell(value: "972", label: "Classes")
-            statDivider
-            statCell(value: "Offline", label: "No internet")
-        }
-        .background(NomTheme.stone900)
-        .padding(.bottom, 2)
-    }
-
-    private func statCell(value: String, label: String) -> some View {
-        VStack(spacing: 3) {
-            Text(value)
-                .font(.system(size: 16, weight: .bold, design: .serif))
-                .foregroundStyle(NomTheme.lacquer400)
-            Text(label)
-                .font(.system(size: 10, weight: .medium))
-                .tracking(0.5)
-                .foregroundStyle(Color.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-    }
-
-    private var statDivider: some View {
-        Rectangle()
-            .fill(Color.white.opacity(0.08))
-            .frame(width: 1)
-            .padding(.vertical, 10)
     }
 
     // MARK: - Scan button

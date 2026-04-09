@@ -17,6 +17,14 @@ struct ResultView: View {
     @State private var correctionTarget: CorrectionTarget?
     /// Maps result index → user-submitted corrected character.
     @State private var corrections: [Int: String] = [:]
+    @State private var transliterationExpanded = false
+    @State private var scriptFilter: ScriptFilter = .all
+
+    enum ScriptFilter: String, CaseIterable {
+        case all = "All"
+        case han = "Han"
+        case nom = "Nom"
+    }
 
     init(sourceImage: UIImage, results: [CharacterDecodeResult], cropImages: [UIImage]) {
         self.sourceImage = sourceImage
@@ -47,21 +55,41 @@ struct ResultView: View {
             VStack(spacing: 24) {
                 // Transliteration header
                 if !fullTransliteration.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 6) {
                         Text("Transliteration")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .textCase(.uppercase)
                         Text(fullTransliteration)
                             .font(.title3)
+                            .lineLimit(transliterationExpanded ? nil : 2)
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                transliterationExpanded.toggle()
+                            }
+                        } label: {
+                            Text(transliterationExpanded ? "Show less" : "Show more")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(NomTheme.lacquer500)
+                        }
+                        .buttonStyle(.plain)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal)
                 }
 
+                // Script filter
+                Picker("Filter", selection: $scriptFilter) {
+                    ForEach(ScriptFilter.allCases, id: \.self) { f in
+                        Text(f.rawValue).tag(f)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal)
+
                 // Character grid
                 LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(Array(results.enumerated()), id: \.offset) { index, result in
+                    ForEach(Array(filteredResults), id: \.offset) { index, result in
                         CharacterCard(
                             result: result,
                             cropImage: index < cropImages.count ? cropImages[index] : nil,
@@ -117,6 +145,16 @@ struct ResultView: View {
     }
 
     // MARK: - Helpers
+
+    private var filteredResults: [(offset: Int, element: CharacterDecodeResult)] {
+        results.enumerated().filter { _, result in
+            switch scriptFilter {
+            case .all: return true
+            case .han: return result.type == .han
+            case .nom: return result.type == .nom
+            }
+        }.map { (offset: $0.offset, element: $0.element) }
+    }
 
     private var fullTransliteration: String {
         results.compactMap { $0.quocNgu }.joined(separator: " ")

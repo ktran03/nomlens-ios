@@ -69,7 +69,7 @@ private final class ServiceContainer: ObservableObject {
         #if DEBUG
         Task {
             let localModelPath = ProcessInfo.processInfo.environment["NOMlens_LOCAL_MODEL_PATH"]
-                ?? "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_v2.0.0.mlpackage"
+                ?? "/Users/kt/Documents/NomLensMLModel/export/NomLensClassifier_3.0.0.mlpackage"
             let localURL = URL(fileURLWithPath: localModelPath)
             if FileManager.default.fileExists(atPath: localURL.path) {
                 await manager.loadModel(at: localURL)

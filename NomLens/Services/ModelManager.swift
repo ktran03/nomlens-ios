@@ -59,9 +59,11 @@ actor ModelManager {
     private static let modelsDirName  = "NomLens/models"
 
     /// The version of the model currently active on this device.
-    /// Falls back to `bundledModelVersion` if no downloaded model has been stored yet.
+    /// Returns whichever is higher: the stored (downloaded) version or the bundled version.
     static var activeVersion: String {
-        UserDefaults.standard.string(forKey: versionKey) ?? bundledModelVersion
+        let stored = UserDefaults.standard.string(forKey: versionKey)
+        guard let stored else { return bundledModelVersion }
+        return isVersion(bundledModelVersion, newerThan: stored) ? bundledModelVersion : stored
     }
 
     // MARK: - Dependencies
@@ -101,20 +103,42 @@ actor ModelManager {
 
     /// Directly load a model from a local URL — for development/testing only.
     func loadModel(at url: URL) {
-        activate(modelURL: url, version: url.deletingPathExtension().lastPathComponent)
+        // Extract just the version number from filenames like "NomLensClassifier_3.0.0"
+        let stem = url.deletingPathExtension().lastPathComponent
+        let version = stem.components(separatedBy: "_").last ?? stem
+        activate(modelURL: url, version: version)
     }
 
-    /// Loads the model bundled with the app binary as a fallback when no
-    /// downloaded model is present. Safe to call after `loadStoredModel()`.
+    /// Loads the model bundled with the app binary when no downloaded model is
+    /// present OR when the bundled version is newer than the stored version.
+    /// Safe to call after `loadStoredModel()`.
     func loadBundledModelIfNeeded() async {
-        guard storedVersion == nil else { return } // already have a downloaded model
+        let bundledVersion = ModelManager.bundledModelVersion
+        if let stored = storedVersion, !Self.isVersion(bundledVersion, newerThan: stored) {
+            return // downloaded model is same age or newer — keep it
+        }
         let name = ModelManager.bundledModelName
-        let version = ModelManager.bundledModelVersion
         // Xcode compiles .mlpackage → .mlmodelc at build time; try compiled first.
         if let url = Bundle.main.url(forResource: name, withExtension: "mlmodelc")
             ?? Bundle.main.url(forResource: name, withExtension: "mlpackage") {
-            activate(modelURL: url, version: version)
+            activate(modelURL: url, version: bundledVersion)
         }
+    }
+
+    /// Returns true if `a` is a higher semantic version than `b`.
+    /// Compares dot-separated integer tuples; non-numeric components sort as 0.
+    private static func isVersion(_ a: String, newerThan b: String) -> Bool {
+        let parse: (String) -> [Int] = {
+            $0.split(separator: ".").map { Int($0) ?? 0 }
+        }
+        let av = parse(a), bv = parse(b)
+        let len = max(av.count, bv.count)
+        for i in 0..<len {
+            let ai = i < av.count ? av[i] : 0
+            let bi = i < bv.count ? bv[i] : 0
+            if ai != bi { return ai > bi }
+        }
+        return false
     }
 
     /// Hits the manifest endpoint and downloads a newer model if one exists.

@@ -11,7 +11,6 @@ struct AboutView: View {
                     aboutHero
                     missionSection
                     howItWorksSection
-                    modelStatsSection
                     audienceSection
                     footerSection
                 }
@@ -207,56 +206,6 @@ struct AboutView: View {
                 .frame(width: 2, height: 24)
             Spacer()
         }
-    }
-
-    // MARK: - Model stats
-
-    private var modelStatsSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Divider()
-            VStack(alignment: .leading, spacing: 24) {
-                sectionEyebrow("Model")
-
-                Text("By the numbers")
-                    .font(.system(size: 28, weight: .bold, design: .serif))
-                    .foregroundStyle(NomTheme.stone900)
-
-                Text("EfficientNet-B0 with temperature-scaled calibration. Trained on HWDB handwriting + Han Nôm font renders.")
-                    .font(.subheadline)
-                    .foregroundStyle(NomTheme.stone500)
-
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                    statCard(value: "97.6%",  label: "Validation accuracy")
-                    statCard(value: "99.3%",  label: "Precision ≥90% confidence")
-                    statCard(value: "<10ms",  label: "Inference on Neural Engine")
-                    statCard(value: "10.6 MB", label: "Model size")
-                    statCard(value: "972",    label: "Character classes (v1)")
-                    statCard(value: "296K+",  label: "Training images")
-                    statCard(value: "0.0034", label: "Calibration error (ECE)")
-                    statCard(value: "1.4%",   label: "Routes to cloud fallback")
-                }
-            }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 32)
-        }
-        .background(Color(.systemBackground))
-    }
-
-    private func statCard(value: String, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(value)
-                .font(.system(size: 24, weight: .bold, design: .serif))
-                .foregroundStyle(NomTheme.lacquer500)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(NomTheme.stone500)
-                .lineLimit(2)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NomTheme.stone50)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(NomTheme.stone200, lineWidth: 0.5))
     }
 
     // MARK: - Audience
