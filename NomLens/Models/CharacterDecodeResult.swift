@@ -56,7 +56,7 @@ extension CharacterDecodeResult {
         let notes: String? = mandarin.map { "pinyin: \($0)" }
         return CharacterDecodeResult(
             character: character,
-            type: nil,
+            type: inferScriptType(character: character, mandarin: mandarin, vietnamese: quocNgu),
             quocNgu: quocNgu,
             meaning: meaning,
             confidence: confidence,
@@ -64,6 +64,17 @@ extension CharacterDecodeResult {
             damageNoted: false,
             notes: notes
         )
+    }
+
+    /// Infer Han vs Nôm from dictionary data and Unicode range.
+    /// - Mandarin reading present → Hán (shared with Chinese)
+    /// - Vietnamese only, no Mandarin → Nôm (Vietnamese-invented)
+    /// - Neither, but codepoint ≥ U+20000 (CJK Extension B+) → Nôm (strong signal)
+    static func inferScriptType(character: String?, mandarin: String?, vietnamese: String?) -> CharacterType? {
+        if mandarin != nil { return .han }
+        if vietnamese != nil { return .nom }
+        if let scalar = character?.unicodeScalars.first, scalar.value >= 0x20000 { return .nom }
+        return nil
     }
 
     /// Placeholder used when no result could be produced.

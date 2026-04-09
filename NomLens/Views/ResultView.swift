@@ -208,12 +208,15 @@ private struct CharacterCard: View {
                     .multilineTextAlignment(.center)
             }
 
-            if correctedCharacter != nil {
-                Label("Corrected", systemImage: "checkmark.circle.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(NomTheme.lacquer500)
-            } else {
-                confidenceBadge
+            HStack(spacing: 4) {
+                scriptTypeBadge
+                if correctedCharacter != nil {
+                    Label("Corrected", systemImage: "checkmark.circle.fill")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(NomTheme.lacquer500)
+                } else {
+                    confidenceBadge
+                }
             }
 
             trainingBadge
@@ -224,6 +227,30 @@ private struct CharacterCard: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle())
         .onTapGesture { onTap() }
+    }
+
+    @ViewBuilder
+    private var scriptTypeBadge: some View {
+        switch result.type {
+        case .han:
+            Text("Han")
+                .font(.system(size: 9).weight(.semibold))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Color.blue.opacity(0.12))
+                .foregroundStyle(Color.blue)
+                .clipShape(Capsule())
+        case .nom:
+            Text("Nom")
+                .font(.system(size: 9).weight(.semibold))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(NomTheme.lacquer500.opacity(0.12))
+                .foregroundStyle(NomTheme.lacquer500)
+                .clipShape(Capsule())
+        case .unclear, .none:
+            EmptyView()
+        }
     }
 
     @ViewBuilder

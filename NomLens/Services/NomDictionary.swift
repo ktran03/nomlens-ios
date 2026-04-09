@@ -34,6 +34,28 @@ final class NomDictionary {
         for (key, r) in raw {
             built[key] = Entry(mandarin: r.m, vietnamese: r.v, definition: r.d)
         }
+
+        // Merge chunom.org supplemental dictionary — fills definition gaps for
+        // Nôm-specific characters that Unihan doesn't cover.
+        if let supURL  = Bundle.main.url(forResource: "nom_supplemental", withExtension: "json"),
+           let supData = try? Data(contentsOf: supURL),
+           let supRaw  = try? JSONDecoder().decode([String: SupEntry].self, from: supData) {
+            for (key, s) in supRaw {
+                if let existing = built[key] {
+                    // Only fill in fields that are missing in the Unihan entry.
+                    let mergedVietnamese  = existing.vietnamese  ?? s.v
+                    let mergedDefinition  = existing.definition  ?? s.d
+                    if mergedVietnamese != existing.vietnamese || mergedDefinition != existing.definition {
+                        built[key] = Entry(mandarin: existing.mandarin,
+                                           vietnamese: mergedVietnamese,
+                                           definition: mergedDefinition)
+                    }
+                } else {
+                    built[key] = Entry(mandarin: nil, vietnamese: s.v, definition: s.d)
+                }
+            }
+        }
+
         table = built
     }
 
@@ -50,6 +72,11 @@ final class NomDictionary {
 
     private struct RawEntry: Decodable {
         let m: String?  // mandarin
+        let v: String?  // vietnamese
+        let d: String?  // definition
+    }
+
+    private struct SupEntry: Decodable {
         let v: String?  // vietnamese
         let d: String?  // definition
     }

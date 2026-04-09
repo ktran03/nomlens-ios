@@ -7,11 +7,17 @@ struct SettingsView: View {
     @State private var showKey = false
     @State private var isSaved = false
     @State private var isSet = APIKeyStore.isSet
+    @AppStorage(ModelManager.versionKey) private var storedModelVersion: String?
+
+    private var activeModelVersion: String {
+        storedModelVersion ?? ModelManager.bundledModelVersion
+    }
 
     var body: some View {
         NavigationStack {
             List {
                 claudeKeySection
+                modelSection
                 aboutKeySection
             }
             .navigationTitle("Settings")
@@ -95,6 +101,22 @@ struct SettingsView: View {
             Text("Claude API Key")
         } footer: {
             Text("Used for cloud fallback on low-confidence characters. The app works fully offline without a key — on-device classification only.")
+        }
+    }
+
+    // MARK: - Model section
+
+    private var modelSection: some View {
+        Section {
+            HStack {
+                Label("Active Model", systemImage: "cpu")
+                Spacer()
+                Text("v\(activeModelVersion)")
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("On-Device Model")
         }
     }
 

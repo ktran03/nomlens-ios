@@ -52,11 +52,17 @@ actor ModelManager {
 
     /// Name and version of the model bundled with the app binary.
     /// Update these when shipping a new bundled model.
-    static let bundledModelName    = "NomLensClassifier_v2.0.0"
-    static let bundledModelVersion = "2.0.0"
+    static let bundledModelName    = "NomLensClassifier_3.0.0"
+    static let bundledModelVersion = "3.0.0"
 
-    private static let versionKey     = "nomModelVersion"
+    static let versionKey          = "nomModelVersion"
     private static let modelsDirName  = "NomLens/models"
+
+    /// The version of the model currently active on this device.
+    /// Falls back to `bundledModelVersion` if no downloaded model has been stored yet.
+    static var activeVersion: String {
+        UserDefaults.standard.string(forKey: versionKey) ?? bundledModelVersion
+    }
 
     // MARK: - Dependencies
 
