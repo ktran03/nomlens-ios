@@ -126,20 +126,18 @@ struct CameraView: View {
     private var cameraButton: some View {
         if !cameraAvailable {
             // Simulator or device without camera — show disabled state
-            Label("Take Photo", systemImage: "camera.fill")
-                .font(.title3.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(NomTheme.lacquer500.opacity(0.3))
-                .foregroundStyle(.white.opacity(0.4))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-                .overlay(
-                    Text("Camera unavailable on this device")
-                        .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.3))
-                        .offset(y: 28)
-                )
-                .padding(.bottom, 8)
+            VStack(spacing: 6) {
+                Label("Take Photo", systemImage: "camera.fill")
+                    .font(.title3.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(NomTheme.lacquer500.opacity(0.3))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                Text("Camera unavailable on this device")
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.3))
+            }
         } else if cameraPermission == .denied || cameraPermission == .restricted {
             // Permission denied — prompt to open Settings
             Button {

@@ -19,11 +19,19 @@ struct ResultView: View {
     @State private var corrections: [Int: String] = [:]
     @State private var transliterationExpanded = false
     @State private var scriptFilter: ScriptFilter = .all
+    @State private var confidenceFilter: ConfidenceFilter = .all
 
     enum ScriptFilter: String, CaseIterable {
         case all = "All"
         case han = "Han"
         case nom = "Nom"
+    }
+
+    enum ConfidenceFilter: String, CaseIterable {
+        case all    = "All"
+        case high   = "High"
+        case medium = "Medium"
+        case low    = "Low"
     }
 
     init(sourceImage: UIImage, results: [CharacterDecodeResult], cropImages: [UIImage]) {
@@ -78,13 +86,18 @@ struct ResultView: View {
                     .padding(.horizontal)
                 }
 
-                // Script filter
-                Picker("Filter", selection: $scriptFilter) {
-                    ForEach(ScriptFilter.allCases, id: \.self) { f in
-                        Text(f.rawValue).tag(f)
+                // Filters
+                VStack(spacing: 8) {
+                    Picker("Script", selection: $scriptFilter) {
+                        ForEach(ScriptFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                     }
+                    .pickerStyle(.segmented)
+
+                    Picker("Confidence", selection: $confidenceFilter) {
+                        ForEach(ConfidenceFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
                 .padding(.horizontal)
 
                 // Character grid
@@ -105,25 +118,15 @@ struct ResultView: View {
                 }
                 .padding(.horizontal)
 
-                // Save button
-                Button(action: save) {
-                    Label(saved ? "Saved" : "Save to History",
-                          systemImage: saved ? "checkmark.circle.fill" : "square.and.arrow.down")
-                        .font(.title3.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(saved ? NomTheme.stone700 : NomTheme.lacquer500)
-                        .foregroundStyle(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                }
-                .disabled(saved)
-                .padding(.horizontal)
-                .padding(.bottom)
+                Spacer().frame(height: 8)
             }
             .padding(.top)
         }
         .navigationTitle("Results")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if !saved { save() }
+        }
         .sheet(item: $correctionTarget) { target in
             CorrectionSheet(
                 cropImage: target.cropImage,
@@ -148,11 +151,18 @@ struct ResultView: View {
 
     private var filteredResults: [(offset: Int, element: CharacterDecodeResult)] {
         results.enumerated().filter { _, result in
-            switch scriptFilter {
-            case .all: return true
-            case .han: return result.type == .han
-            case .nom: return result.type == .nom
+            let scriptMatch: Bool = switch scriptFilter {
+            case .all: true
+            case .han: result.type == .han
+            case .nom: result.type == .nom
             }
+            let confidenceMatch: Bool = switch confidenceFilter {
+            case .all:    true
+            case .high:   result.confidence == .high
+            case .medium: result.confidence == .medium
+            case .low:    result.confidence == .low
+            }
+            return scriptMatch && confidenceMatch
         }.map { (offset: $0.offset, element: $0.element) }
     }
 
