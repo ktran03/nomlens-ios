@@ -99,7 +99,7 @@ struct CharacterSegmentor {
     /// because within a single row there are no cross-row column overlaps, and
     /// the local binarisation handles any background colour automatically.
     private func cropsFromLines(
-        observations: [VNTextObservation],
+        observations: [VNRecognizedTextObservation],
         cgImage: CGImage,
         sourceImage: UIImage
     ) -> [CharacterCrop] {
@@ -213,7 +213,7 @@ struct CharacterSegmentor {
     /// Target longest-side length used for Vision detection.
     private static let detectionMaxDimension: CGFloat = 800
 
-    private func runVision(on cgImage: CGImage) async -> [VNTextObservation] {
+    private func runVision(on cgImage: CGImage) async -> [VNRecognizedTextObservation] {
         let w = CGFloat(cgImage.width)
         let h = CGFloat(cgImage.height)
         let baseScale = min(1.0, Self.detectionMaxDimension / max(w, h))
@@ -228,21 +228,21 @@ struct CharacterSegmentor {
         return []
     }
 
-    private func detectTextRectangles(in cgImage: CGImage) async -> [VNTextObservation] {
-        await withCheckedContinuation { continuation in
-            let request = VNDetectTextRectanglesRequest { request, _ in
-                let obs = request.results as? [VNTextObservation] ?? []
-                continuation.resume(returning: obs)
-            }
-            request.reportCharacterBoxes = true
+    private func detectTextRectangles(in cgImage: CGImage) async -> [VNRecognizedTextObservation] {
+        let request = VNRecognizeTextRequest()
+        // Accurate mode uses the Chinese-trained detection stage, which handles
+        // Han character spacing and density far better than the old blob detector.
+        request.recognitionLevel = .accurate
+        request.recognitionLanguages = ["zh-Hant", "zh-Hans"]
+        request.usesLanguageCorrection = false
 
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-            do {
-                try handler.perform([request])
-            } catch {
-                continuation.resume(returning: [])
-            }
+        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+        do {
+            try handler.perform([request])
+        } catch {
+            return []
         }
+        return request.results ?? []
     }
 
     /// Returns a scaled copy of `cgImage`. Returns nil if the context can't be made.
@@ -262,51 +262,6 @@ struct CharacterSegmentor {
     }
 
     // MARK: - Crop extraction
-
-    private func buildCrops(
-        from observations: [VNTextObservation],
-        sourceImage: UIImage,
-        cgImage: CGImage
-    ) -> [CharacterCrop] {
-        let imageW = CGFloat(cgImage.width)
-        let imageH = CGFloat(cgImage.height)
-
-        var crops: [CharacterCrop] = []
-
-        for (obsIdx, obs) in observations.enumerated() {
-            let charBoxes = obs.characterBoxes ?? []
-
-            for (charIdx, box) in charBoxes.enumerated() {
-                // Vision normalized box: origin bottom-left, y increases upward.
-                // Convert to pixel-space with origin top-left.
-                let norm = box.boundingBox
-                let pixelBox = CGRect(
-                    x:      norm.minX * imageW,
-                    y:      (1 - norm.maxY) * imageH,
-                    width:  norm.width  * imageW,
-                    height: norm.height * imageH
-                )
-
-                let clamped = clampedBox(pixelBox, imageWidth: imageW, imageHeight: imageH)
-                guard clamped.width >= 20, clamped.height >= 20 else { continue }
-
-                guard let croppedCG = cgImage.cropping(to: clamped) else { continue }
-                let cropUI = UIImage(cgImage: croppedCG, scale: sourceImage.scale,
-                                    orientation: sourceImage.imageOrientation)
-
-                crops.append(CharacterCrop(
-                    id: UUID(),
-                    image: cropUI,
-                    boundingBox: clamped,
-                    observationIndex: obsIdx,
-                    characterIndex: charIdx,
-                    normalizedBox: norm
-                ))
-            }
-        }
-
-        return crops
-    }
 
     // MARK: - Reading order sort (testable)
 
