@@ -10,6 +10,7 @@ struct HomeView: View {
 
     @State private var showAbout = false
     @State private var showSettings = false
+    @State private var showArchive = false
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -35,6 +36,12 @@ struct HomeView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 16) {
                     Button {
+                        showArchive = true
+                    } label: {
+                        Image(systemName: "globe")
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
+                    Button {
                         showSettings = true
                     } label: {
                         Image(systemName: "gearshape")
@@ -54,6 +61,9 @@ struct HomeView: View {
         }
         .sheet(isPresented: $showSettings) {
             SettingsView()
+        }
+        .sheet(isPresented: $showArchive) {
+            ArchiveView()
         }
     }
 

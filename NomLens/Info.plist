@@ -4,6 +4,7 @@
 <dict>
 	<key>CLAUDE_API_KEY</key>
 	<string>$(CLAUDE_API_KEY)</string>
+
 	<key>NSCameraUsageDescription</key>
 	<string>NomLens uses your camera to photograph Han Nôm inscriptions on stone steles, temple carvings, and manuscripts.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

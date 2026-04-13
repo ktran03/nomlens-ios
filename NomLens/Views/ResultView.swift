@@ -20,6 +20,8 @@ struct ResultView: View {
     @State private var transliterationExpanded = false
     @State private var scriptFilter: ScriptFilter = .all
     @State private var confidenceFilter: ConfidenceFilter = .all
+    @State private var showContribution = false
+    @State private var contributionSubmitted = false
 
     enum ScriptFilter: String, CaseIterable {
         case all = "All"
@@ -124,8 +126,31 @@ struct ResultView: View {
         }
         .navigationTitle("Results")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showContribution = true
+                } label: {
+                    Label(
+                        contributionSubmitted ? "Contributed" : "Contribute",
+                        systemImage: contributionSubmitted ? "checkmark.circle.fill" : "globe"
+                    )
+                    .foregroundStyle(contributionSubmitted ? .green : NomTheme.lacquer500)
+                }
+                .disabled(contributionSubmitted)
+            }
+        }
         .onAppear {
             if !saved { save() }
+        }
+        .sheet(isPresented: $showContribution) {
+            ContributionSheet(
+                sourceImage: sourceImage,
+                results: results,
+                fullTransliteration: fullTransliteration
+            ) {
+                contributionSubmitted = true
+            }
         }
         .sheet(item: $correctionTarget) { target in
             CorrectionSheet(

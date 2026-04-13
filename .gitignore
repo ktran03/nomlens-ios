@@ -1,5 +1,6 @@
 # API keys — never commit
 NomLens/Config.xcconfig
+NomLens/Services/SupabaseConfig.swift
 
 # Trained model weights — delivered via OTA, not stored in repo
 *.mlpackage
