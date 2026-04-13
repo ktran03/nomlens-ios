@@ -9,19 +9,17 @@ struct ContributionSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var sourceType: NLSource.SourceType = .stoneStele
+    @State private var sourceType: NLSource.SourceType = .other
     @State private var title = ""
     @State private var locationName = ""
     @State private var province = ""
     @State private var country = "Vietnam"
-    @State private var condition: NLSource.SourceCondition = .weathered
+    @State private var condition: NLSource.SourceCondition = .good
     @State private var estimatedPeriod = ""
     @State private var isSubmitting = false
     @State private var submitError: String?
 
-    private var canSubmit: Bool {
-        !locationName.trimmingCharacters(in: .whitespaces).isEmpty && !isSubmitting
-    }
+    private var canSubmit: Bool { !isSubmitting }
 
     var body: some View {
         NavigationStack {
@@ -89,8 +87,6 @@ struct ContributionSheet: View {
                 .autocorrectionDisabled()
         } header: {
             Text("Location")
-        } footer: {
-            Text("Location name is required.")
         }
     }
 
@@ -109,7 +105,6 @@ struct ContributionSheet: View {
 
     private func submit() {
         let trimmedLocation = locationName.trimmingCharacters(in: .whitespaces)
-        guard !trimmedLocation.isEmpty else { return }
 
         isSubmitting = true
         submitError  = nil
@@ -124,7 +119,7 @@ struct ContributionSheet: View {
                     title: title.isEmpty ? nil : title,
                     sourceType: sourceType,
                     estimatedPeriod: estimatedPeriod.isEmpty ? nil : estimatedPeriod,
-                    locationName: trimmedLocation,
+                    locationName: trimmedLocation.isEmpty ? "Unknown" : trimmedLocation,
                     province: province.isEmpty ? nil : province,
                     country: country.isEmpty ? "Vietnam" : country,
                     coordinates: nil,

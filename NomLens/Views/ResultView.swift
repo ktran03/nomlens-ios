@@ -9,6 +9,8 @@ struct ResultView: View {
     let results: [CharacterDecodeResult]
     /// Original crop images in the same order as `results`.
     let cropImages: [UIImage]
+    /// Called by the Home button to pop all the way to root. Nil in history mode.
+    var onGoHome: (() -> Void)? = nil
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
@@ -36,10 +38,11 @@ struct ResultView: View {
         case low    = "Low"
     }
 
-    init(sourceImage: UIImage, results: [CharacterDecodeResult], cropImages: [UIImage]) {
+    init(sourceImage: UIImage, results: [CharacterDecodeResult], cropImages: [UIImage], onGoHome: (() -> Void)? = nil) {
         self.sourceImage = sourceImage
         self.results = results
         self.cropImages = cropImages
+        self.onGoHome = onGoHome
         self._saved = State(initialValue: false)
     }
 
@@ -63,30 +66,32 @@ struct ResultView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Transliteration header
-                if !fullTransliteration.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Transliteration")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .textCase(.uppercase)
-                        Text(fullTransliteration)
-                            .font(.title3)
-                            .lineLimit(transliterationExpanded ? nil : 2)
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                transliterationExpanded.toggle()
-                            }
-                        } label: {
-                            Text(transliterationExpanded ? "Show less" : "Show more")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(NomTheme.lacquer500)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-                }
+                archiveCTA
+
+                // TODO: rethink transliteration display
+//                if !fullTransliteration.isEmpty {
+//                    VStack(alignment: .leading, spacing: 6) {
+//                        Text("Transliteration")
+//                            .font(.caption)
+//                            .foregroundStyle(.secondary)
+//                            .textCase(.uppercase)
+//                        Text(fullTransliteration)
+//                            .font(.title3)
+//                            .lineLimit(transliterationExpanded ? nil : 2)
+//                        Button {
+//                            withAnimation(.easeInOut(duration: 0.2)) {
+//                                transliterationExpanded.toggle()
+//                            }
+//                        } label: {
+//                            Text(transliterationExpanded ? "Show less" : "Show more")
+//                                .font(.caption.weight(.medium))
+//                                .foregroundStyle(NomTheme.lacquer500)
+//                        }
+//                        .buttonStyle(.plain)
+//                    }
+//                    .frame(maxWidth: .infinity, alignment: .leading)
+//                    .padding(.horizontal)
+//                }
 
                 // Filters
                 VStack(spacing: 8) {
@@ -120,29 +125,11 @@ struct ResultView: View {
                 }
                 .padding(.horizontal)
 
-                Spacer().frame(height: 8)
             }
             .padding(.top)
         }
         .navigationTitle("Results")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showContribution = true
-                } label: {
-                    Label(
-                        contributionSubmitted ? "Contributed" : "Contribute",
-                        systemImage: contributionSubmitted ? "checkmark.circle.fill" : "globe"
-                    )
-                    .foregroundStyle(contributionSubmitted ? .green : NomTheme.lacquer500)
-                }
-                .disabled(contributionSubmitted)
-            }
-        }
-        .onAppear {
-            if !saved { save() }
-        }
         .sheet(isPresented: $showContribution) {
             ContributionSheet(
                 sourceImage: sourceImage,
@@ -150,6 +137,7 @@ struct ResultView: View {
                 fullTransliteration: fullTransliteration
             ) {
                 contributionSubmitted = true
+                if !saved { save() }
             }
         }
         .sheet(item: $correctionTarget) { target in
@@ -170,6 +158,72 @@ struct ResultView: View {
         let index: Int
         let result: CharacterDecodeResult
         let cropImage: UIImage?
+    }
+
+    // MARK: - Archive CTA
+
+    private var archiveCTA: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "building.columns")
+                .font(.system(size: 28))
+                .foregroundStyle(NomTheme.lacquer500)
+
+            VStack(spacing: 6) {
+                Text("Contribute to the Archive")
+                    .font(.headline)
+                Text("Help preserve Han Nôm culture by adding this scan to the public database. Contributions are used to train future models and improve accuracy. Tap any character below to correct misreadings first.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            if contributionSubmitted {
+                Label("Contributed — thank you", systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+                    .padding(.top, 4)
+
+                Button {
+                    if let goHome = onGoHome { goHome() } else { dismiss() }
+                } label: {
+                    Text("Home")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.green)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+            } else {
+                Button {
+                    showContribution = true
+                } label: {
+                    Text("Contribute")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(NomTheme.lacquer500)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+
+                Button {
+                    save()
+                    dismiss()
+                } label: {
+                    Text(saved ? "Saved Locally" : "Save Without Contributing")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(saved ? .secondary : NomTheme.stone600)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(saved)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.bottom, 8)
     }
 
     // MARK: - Helpers

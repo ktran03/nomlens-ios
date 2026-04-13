@@ -234,7 +234,8 @@ struct ContentView: View {
                 ResultView(
                     sourceImage: wrapped.image,
                     results: results,
-                    cropImages: vm.lastCrops.map(\.image)
+                    cropImages: vm.lastCrops.map(\.image),
+                    onGoHome: { navPath = NavigationPath() }
                 )
             }
         }
